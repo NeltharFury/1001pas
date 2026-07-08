@@ -102,6 +102,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   /* ── contrôles en bas à droite (zone du pouce) : recherche, zoom ── */
   #ctrlStack{right:14px;bottom:20px;display:flex;flex-direction:column;gap:11px;align-items:center;}
+  body.routing #ctrlStack{bottom:82px;}   /* remonte au-dessus de la barre d'itinéraire pleine largeur */
   #zoomStack{display:flex;flex-direction:column;gap:8px;background:linear-gradient(180deg,#f4e8ca,#e9d9b1);
     border:1px solid rgba(74,52,33,.5);border-radius:26px;padding:5px;box-shadow:var(--panelSh);}
   #zoomStack button{width:42px;height:42px;border-radius:50%;border:none;background:transparent;
@@ -185,20 +186,18 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #loadChip.show{opacity:1;}
   #gpsChip{top:90px;left:50%;transform:translateX(-50%);padding:5px 14px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;z-index:9;}
   #gpsChip.show{opacity:1;}
-  #recenterBtn{left:16px;bottom:20px;width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
+  #recenterBtn{width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
     background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 6px 16px rgba(40,24,6,.3);
-    display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;
-    opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none;}
-  #recenterBtn.show{opacity:1;transform:translateY(0);pointer-events:auto;}
-  body:not(.prod) #recenterBtn{bottom:116px;}    /* en test : au-dessus du joystick */
+    align-items:center;justify-content:center;padding:0;cursor:pointer;display:none;}   /* dans #ctrlStack, apparaît quand la carte est déplacée */
+  #recenterBtn.show{display:flex;}
   body.prod #zoomStack{display:none;}             /* distribuable : pas de +/- (pinch-zoom au doigt, intuitif) */
 
   /* ── barre d'itinéraire ── */
-  #routeBar{bottom:150px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:9px;max-width:calc(100vw - 24px);box-sizing:border-box;
-    padding:8px 8px 8px 15px;border-radius:22px;background:var(--panelG);border:1px solid rgba(74,52,33,.55);
-    box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 10px 24px rgba(40,24,6,.4);animation:riseInC .3s ease both;z-index:8;}
+  #routeBar{bottom:0;left:0;right:0;transform:none;display:none;align-items:center;gap:12px;box-sizing:border-box;
+    padding:13px 16px calc(13px + env(safe-area-inset-bottom));border-radius:16px 16px 0 0;background:var(--panelG);border:1px solid rgba(74,52,33,.55);border-bottom:none;
+    box-shadow:inset 0 2px 0 rgba(250,242,220,.7),0 -12px 30px rgba(40,24,6,.42);animation:riseIn .3s ease both;z-index:11;}
   #routeBar.show{display:flex;}
-  #routeBar .rb-to{font-size:13px;color:#35240f;white-space:nowrap;}
+  #routeBar .rb-to{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:#35240f;}
   #routeBar b{font-weight:600;}
   #routeBar .rb-pas{font-family:var(--display);font-size:10.5px;font-weight:700;color:#7c5a17;white-space:nowrap;}
   #rbClear{width:26px;height:26px;border-radius:50%;border:1px solid rgba(74,52,33,.4);background:rgba(74,52,33,.08);cursor:pointer;font-size:11px;color:#4a3421;line-height:1;padding:0;}
@@ -295,6 +294,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   <button id="simBtn" class="hud card" aria-label="Mode simulation (test)">⚙</button>
 
   <div id="ctrlStack" class="hud">
+    <button id="recenterBtn" aria-label="Recentrer sur ma position">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" fill="none" stroke="#4a3421" stroke-width="2"/><path d="M12 2.5v3.4 M12 18.1v3.4 M2.5 12h3.4 M18.1 12h3.4" stroke="#4a3421" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
     <button id="progBtn" aria-label="Complétion de la contrée">
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5 h8.5 L18.5 7.5 V20.5 H6 Z M14.5 3.5 V7.5 H18.5 M8.6 11.4 h7 M8.6 14.4 h7 M8.6 17.2 h4.4" fill="none" stroke="#4a3421" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
@@ -374,9 +376,6 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   <div id="hint" class="hud">Marchez — la brume se lève sur vos pas.</div>
   <div id="loadChip" class="hud card">⏳ Chargement des sites…</div>
   <div id="gpsChip" class="hud card">GPS…</div>
-  <button id="recenterBtn" class="hud" aria-label="Recentrer sur ma position">
-    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" fill="none" stroke="#4a3421" stroke-width="2"/><path d="M12 2.5v3.4 M12 18.1v3.4 M2.5 12h3.4 M18.1 12h3.4" stroke="#4a3421" stroke-width="2" stroke-linecap="round"/></svg>
-  </button>
 
   <div id="poiPanel" class="hud">
     <div class="pp-grab"></div>
@@ -758,7 +757,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Dévoile la contrée où l'on se trouve (sinon, au démarrage, la brume opaque cache toute la carte)
   function revealStart(){if(!world)return;discoverZone(zoneAt(state.pl.x,state.pl.y));}
 
-  const totalXpForLevel=L=>L<=1?0:500*(L-1)+150*(L-1)*(L-2);   // niveau L→L+1 coûte 500+300·(L-1) XP (montée régulière, jamais absurde)
+  const totalXpForLevel=L=>L<=1?0:500*(L-1)*L;   // montée N→N+1 coûte N×1000 XP (idée d'Étienne) ; niv.2=1000, 3=3000, 4=6000, 10=45000
   function levelInfo(xp){let L=1;while(L<999&&totalXpForLevel(L+1)<=xp)L++;const cur=totalXpForLevel(L),next=totalXpForLevel(L+1);return{level:L,frac:clamp((xp-cur)/Math.max(1,next-cur),0,1)};}
   function titleForLevel(L){let t=TITLES[0].name;for(const x of TITLES)if(L>=x.min)t=x.name;return t;}
   function nextTitle(L){for(const x of TITLES)if(x.min>L)return x;return null;}
@@ -847,8 +846,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function doRouteFetch(){if(!route)return;route.ffx=state.pl.x;route.ffy=state.pl.y;const my=++routeReq;
     fetchRoute(route.x,route.y).then(r=>{if(my===routeReq&&route){route.poly=r.poly;route.dist=r.dist;}}).catch(()=>{/* repli : ligne directe */});}
   function setRoute(x,y,name){route={x:x,y:y,name:name,poly:null,dist:null,_remain:null,ffx:state.pl.x,ffy:state.pl.y};
-    rbName.textContent=name;routeBar.classList.add('show');toast('r','◈','Itinéraire tracé',name);doRouteFetch();}
-  function clearRoute(){routeReq++;route=null;routeBar.classList.remove('show');}
+    rbName.textContent=name;routeBar.classList.add('show');document.body.classList.add('routing');toast('r','◈','Itinéraire tracé',name);doRouteFetch();}
+  function clearRoute(){routeReq++;route=null;routeBar.classList.remove('show');document.body.classList.remove('routing');}
   document.getElementById('rbClear').onclick=clearRoute;
   // ── zoom (le dézoom mène naturellement à la vue planète — plus de bouton dédié) ──
   document.getElementById('zin').onclick=()=>map.zoomIn();
@@ -1315,19 +1314,20 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   let geoWatch=null, geoFirst=true, bootHadSave=false, geoWatchdog=null;
   function setHint(txt){if(txt){hint.textContent=txt;hint.classList.remove('gone');}}
   function gpsChip(txt,show){var c=document.getElementById('gpsChip');if(!c)return;if(txt!=null)c.textContent=txt;c.classList.toggle('show',!!show);}
+  function gpsLabel(acc){var a=Math.round(acc);return a>40?('GPS ±'+a+' m · trop imprécis — sors dehors + localisation « précise »'):('GPS actif · ±'+a+' m');}
   function applyGpsFix(lng,lat,acc){
     if(!world||!ready)return;
     if(geoFirst){geoFirst=false;clearTimeout(geoWatchdog); // 1er relevé GPS
       if(!bootHadSave){ setLocation(lng,lat); } // NOUVEAU joueur → on FONDE le monde À sa position réelle (carte propre, aucune contrée fantôme du centre par défaut)
       else{ const m=lngLatToM(lng,lat); state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show'); // joueur EXISTANT → on garde la progression, on se place juste dessus
             map.setCenter([lng,lat]);map.setZoom(Math.max(map.getZoom(),CONFIG.defaultZoom));revealStart();maybeFetchArea(); }
-      dirty=true;afterMove();save();toast('r','◈','Position acquise','Le GPS te suit maintenant');gpsChip('GPS actif · ±'+Math.round(acc)+' m',true);return;
+      dirty=true;afterMove();save();toast('r','◈','Position acquise','Le GPS te suit maintenant');gpsChip(gpsLabel(acc),true);return;
     }
     const m=lngLatToM(lng,lat), step=Math.hypot(m.x-state.pl.x,m.y-state.pl.y);
     state.pl.x=m.x;state.pl.y=m.y;
     if(step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // ignore le bruit GPS (immobile) et les sauts aberrants
     dirty=true;afterMove();if(follow)map.setCenter(playerLngLat());
-    gpsChip('GPS actif · ±'+Math.round(acc)+' m', state.dist<25); // se cache une fois que tu as bougé (≥25 m) → preuve que ça suit
+    gpsChip(gpsLabel(acc), acc>40 || state.dist<25); // reste affiché si précision faible ; sinon se cache après 25 m parcourus
   }
   function onGeoErr(err){clearTimeout(geoWatchdog);
     if(err&&err.code===1){setHint('Autorise la localisation pour explorer en marchant.');gpsChip('Localisation refusée — active-la (🔒) puis recharge',true);}
