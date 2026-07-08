@@ -1,0 +1,15 @@
+{
+  "name": "1001 Pas",
+  "short_name": "1001 Pas",
+  "description": "Ta vraie vie devient une carte que tu révèles en marchant.",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EAD9B0",
+  "theme_color": "#2c1f12",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

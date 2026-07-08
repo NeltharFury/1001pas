@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- fond parchemin plein bord (sûr pour icône « maskable ») -->
+  <rect width="512" height="512" fill="#EAD9B0"/>
+  <!-- sceau de cire carmin, centré dans la zone sûre -->
+  <circle cx="258" cy="264" r="150" fill="#6e1522"/>
+  <circle cx="252" cy="256" r="146" fill="#A4243B"/>
+  <circle cx="252" cy="256" r="108" fill="none" stroke="#f7ecd4" stroke-width="9" stroke-opacity="0.85"/>
+  <!-- étoile / boussole -->
+  <path d="M252 150 L281 235 L366 256 L281 277 L252 362 L223 277 L138 256 L223 235 Z"
+        fill="none" stroke="#f9efd9" stroke-width="18" stroke-linejoin="round"/>
+</svg>
