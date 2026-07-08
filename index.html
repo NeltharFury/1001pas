@@ -432,6 +432,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(q.has('prod'))return false; if(q.has('dev')||q.has('sim'))return true;
     const h=location.hostname;return location.protocol==='file:'||h===''||h==='localhost'||h==='127.0.0.1';}catch(_){return false;}})();
   try{if(!DEV)document.body.classList.add('prod');}catch(_){}
+  // NATIVE = tourne dans l'app Android (Capacitor) → on a le VRAI podomètre du téléphone (pas fiables même en intérieur)
+  const NATIVE=!!(window.Capacitor&&typeof window.Capacitor.isNativePlatform==='function'&&window.Capacitor.isNativePlatform());
   const TITLES=[{min:1,name:'Vagabond'},{min:2,name:'Éclaireur des Lisières'},{min:4,name:'Arpenteur des Combes'},
     {min:6,name:'Cartographe des Marches'},{min:9,name:'Découvreur'},{min:12,name:'Grand Explorateur'},{min:16,name:'Maître des 1001 Pas'}];
   const ACHIEVEMENTS=[
@@ -1323,7 +1325,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     }
     const m=lngLatToM(lng,lat), step=Math.hypot(m.x-state.pl.x,m.y-state.pl.y);
     state.pl.x=m.x;state.pl.y=m.y;
-    if(step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // ignore le bruit GPS (immobile) et les sauts aberrants
+    if(!NATIVE && step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // web : distance estimée du GPS. En natif : les pas viennent du podomètre (le GPS ne sert qu'à la position)
     dirty=true;afterMove();if(follow)map.setCenter(playerLngLat());
     gpsChip(gpsLabel(acc), acc>40 || state.dist<25); // reste affiché si précision faible ; sinon se cache après 25 m parcourus
   }
@@ -1338,6 +1340,20 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     geoWatch=navigator.geolocation.watchPosition(
       p=>applyGpsFix(p.coords.longitude,p.coords.latitude,p.coords.accuracy||999),
       onGeoErr,{enableHighAccuracy:true,maximumAge:0,timeout:27000});
+  }
+  // ---- PODOMÈTRE NATIF (app Android) : compte les VRAIS pas via le capteur du téléphone, même en intérieur ----
+  let pedStarted=false;
+  function startPedometer(){
+    if(pedStarted)return;pedStarted=true;
+    try{
+      var Ped=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Pedometer;
+      if(!Ped)return;
+      Ped.addListener('step',function(d){
+        var delta=(d&&d.delta)||0;
+        if(delta>0&&world&&ready){state.dist+=delta*0.75;dirty=true;afterMove();} // 1 pas réel = 0,75 m → alimente distance + XP
+      });
+      Ped.start().catch(function(){});
+    }catch(_){}
   }
 
   // récolte des tuiles (throttlée) : lieux + noms de quartiers INSTANTANÉS dès que des tuiles arrivent
@@ -1362,6 +1378,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     loadZoneCache();                     // ré-ingère les contrées déjà visitées (cache) ; ensureZone() ira chercher la contrée courante (Nominatim)
     hint.classList.toggle('gone',state.dist>40);
     if(!DEV)startGeo();                   // version distribuable : le vrai GPS pilote l'avatar (demande l'autorisation de localisation)
+    if(NATIVE)startPedometer();           // app native : le capteur de pas alimente distance + XP (fiable en intérieur)
     requestAnimationFrame(frame);
   });
   map.on('error',e=>{console.warn('maplibre error',e&&e.error&&e.error.message);});
