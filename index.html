@@ -758,14 +758,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Dévoile la contrée où l'on se trouve (sinon, au démarrage, la brume opaque cache toute la carte)
   function revealStart(){if(!world)return;discoverZone(zoneAt(state.pl.x,state.pl.y));}
 
-  const totalXpForLevel=L=>L<=1?0:500*(L-1)*L;   // montée N→N+1 coûte N×1000 XP (idée d'Étienne) ; niv.2=1000, 3=3000, 4=6000, 10=45000
+  const totalXpForLevel=L=>L<=1?0:500*(L-1)*L;   // montée N→N+1 coûte N×1000 XP ; niv.2=1000, 3=3000, 4=6000, 10=45000
   function levelInfo(xp){let L=1;while(L<999&&totalXpForLevel(L+1)<=xp)L++;const cur=totalXpForLevel(L),next=totalXpForLevel(L+1);return{level:L,frac:clamp((xp-cur)/Math.max(1,next-cur),0,1)};}
   function titleForLevel(L){let t=TITLES[0].name;for(const x of TITLES)if(L>=x.min)t=x.name;return t;}
   function nextTitle(L){for(const x of TITLES)if(x.min>L)return x;return null;}
-  function checkAch(){}   // succès retirés (demande d'Étienne)
+  function checkAch(){}   // succès retirés
   const discToastNames=new Set(); // pour ne pas répéter « Contrée découverte » pour un même nom
   // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Contrée découverte »)
-  function discoverZone(Z){if(!Z||state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true; // découvrir une contrée = 0 XP (demande d'Étienne)
+  function discoverZone(Z){if(!Z||state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true; // découvrir une contrée = 0 XP
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Contrée découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
   function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
