@@ -178,14 +178,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   .searchrow{display:flex;gap:8px;align-items:center;padding-top:10px;}
   .gpsnote{font-size:11px;font-style:italic;color:var(--inkSoft);line-height:1.45;padding-top:8px;}
 
-  #hint{bottom:200px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;
+  #hint{display:none;bottom:200px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;
         padding:7px 18px;border-radius:11px;background:rgba(62,43,22,.88);box-shadow:0 8px 22px rgba(30,18,4,.4);
         font-style:italic;font-size:12.5px;color:#f2e5c4;white-space:nowrap;transition:opacity .6s;animation:floatY 5s ease-in-out infinite;}
   #hint.gone{opacity:0;}
   #loadChip{top:122px;left:50%;transform:translateX(-50%);padding:5px 13px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
   #loadChip.show{opacity:1;}
-  #gpsChip{top:90px;left:50%;transform:translateX(-50%);padding:5px 14px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;z-index:9;}
-  #gpsChip.show{opacity:1;}
   #recenterBtn{width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
     background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 6px 16px rgba(40,24,6,.3);
     align-items:center;justify-content:center;padding:0;cursor:pointer;display:none;}   /* dans #ctrlStack, apparaît quand la carte est déplacée */
@@ -373,9 +371,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <p class="gpsnote">Touche la carte pour marcher jusqu'à un point. Choisis ta ville ci-dessus pour explorer TON quartier. Le GPS marche sur un vrai site/app (souvent bloqué en ouverture locale de fichier).</p>
   </div>
 
-  <div id="hint" class="hud">Marchez — la brume se lève sur vos pas.</div>
+  <div id="hint" class="hud"></div>
   <div id="loadChip" class="hud card">⏳ Chargement des sites…</div>
-  <div id="gpsChip" class="hud card">GPS…</div>
 
   <div id="poiPanel" class="hud">
     <div class="pp-grab"></div>
@@ -972,11 +969,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         toast('r','◈','Destination',label);return;}}
     setLocation(lng,lat);}
 
-  // ---- Toasts + HUD ----
-  const toastsEl=document.getElementById('toasts');
-  function toast(kind,ic,title,sub){const el=document.createElement('div');el.className='toast card '+(kind==='poi'?'poi':'');
-    el.innerHTML=`<div class="tg-ic">${ic}</div><div class="tt"><b>${escHtml(title)}</b><span>${escHtml(sub)}</span></div>`; // noms OSM = données externes → échappés
-    toastsEl.appendChild(el);requestAnimationFrame(()=>el.classList.add('show'));setTimeout(()=>{el.classList.remove('show');setTimeout(()=>el.remove(),400);},3600);}
+  // ---- Notifications = système du téléphone (via le service worker) — PLUS RIEN au milieu de la carte ----
+  function notify(title,body){try{if('Notification'in window&&Notification.permission==='granted'&&navigator.serviceWorker&&navigator.serviceWorker.ready){
+    navigator.serviceWorker.ready.then(function(reg){reg.showNotification(title,{body:body||'',icon:'icon.svg',badge:'icon.svg',tag:'1001pas',renotify:true,silent:true});}).catch(function(){});}}catch(_){}}
+  // On demande l'autorisation de notifier au 1er contact (geste utilisateur requis par le navigateur)
+  addEventListener('pointerdown',function _askN(){try{if('Notification'in window&&Notification.permission==='default')Notification.requestPermission();}catch(_){}removeEventListener('pointerdown',_askN);},{once:true});
+  function toast(kind,ic,title,sub){notify(title,sub);}
   const hint=document.getElementById('hint');
   // Fiche d'un lieu (au clic)
   const poiPanel=document.getElementById('poiPanel'),poiName=document.getElementById('poiName'),poiType=document.getElementById('poiType'),poiIcon=document.getElementById('poiIcon'),poiBody=document.getElementById('poiBody');
@@ -1312,7 +1310,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   // ---- VRAI GPS (version distribuable) : la position réelle du téléphone pilote l'avatar ----
   let geoWatch=null, geoFirst=true, bootHadSave=false, geoWatchdog=null;
-  function setHint(txt){if(txt){hint.textContent=txt;hint.classList.remove('gone');}}
+  function setHint(txt){}   // plus de bandeau texte sur la carte (les messages importants passent en notif système)
   function gpsChip(txt,show){var c=document.getElementById('gpsChip');if(!c)return;if(txt!=null)c.textContent=txt;c.classList.toggle('show',!!show);}
   function gpsLabel(acc){var a=Math.round(acc);return a>40?('GPS ±'+a+' m · trop imprécis — sors dehors + localisation « précise »'):('GPS actif · ±'+a+' m');}
   function applyGpsFix(lng,lat,acc){
@@ -1330,9 +1328,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     gpsChip(gpsLabel(acc), acc>40 || state.dist<25); // reste affiché si précision faible ; sinon se cache après 25 m parcourus
   }
   function onGeoErr(err){clearTimeout(geoWatchdog);
-    if(err&&err.code===1){setHint('Autorise la localisation pour explorer en marchant.');gpsChip('Localisation refusée — active-la (🔒) puis recharge',true);}
-    else if(err&&err.code===3){setHint('Signal GPS faible — mets-toi à l\'air libre.');gpsChip('Pas de signal GPS — va à l\'air libre',true);}
-    else{setHint('Position introuvable pour l\'instant.');gpsChip('Position introuvable pour l\'instant',true);}
+    if(err&&err.code===1)notify('1001 Pas','Autorise la localisation (précise) pour explorer en marchant.');
   }
   function startGeo(){
     if(geoWatch!=null)return;
@@ -1341,7 +1337,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     clearTimeout(geoWatchdog);geoWatchdog=setTimeout(function(){if(geoFirst)gpsChip('GPS silencieux — autorise la localisation (🔒) et va dehors',true);},14000);
     geoWatch=navigator.geolocation.watchPosition(
       p=>applyGpsFix(p.coords.longitude,p.coords.latitude,p.coords.accuracy||999),
-      onGeoErr,{enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+      onGeoErr,{enableHighAccuracy:true,maximumAge:0,timeout:27000});
   }
 
   // récolte des tuiles (throttlée) : lieux + noms de quartiers INSTANTANÉS dès que des tuiles arrivent
