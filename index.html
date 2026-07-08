@@ -115,6 +115,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #simPanel{left:12px;right:12px;bottom:12px;max-width:440px;margin:0 auto;padding:15px 16px 17px;z-index:12;
             transform:translateY(160%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:78vh;overflow:auto;}
   #simPanel.open{transform:translateY(0);}
+  body.prod #simBtn, body.prod #simPanel, body.prod #joystick{display:none!important;}
 
   /* ── fiche de personnage (bas de l'écran, ouverte en touchant l'identité) ── */
   #charSheet{left:0;right:0;bottom:0;max-width:520px;margin:0 auto;z-index:11;position:absolute;
@@ -419,7 +420,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     route:{arrive:20},                                 // m : distance d'arrivée d'un itinéraire
     reveal:{here:70},                                  // m : petit halo de vision immédiate, SEULEMENT tant que la contrée n'est pas encore révélée (révélation = par ZONE)
     zoneSmooth:0,                                       // m : 0 = AUCUN lissage → points OSM bruts, précision maximale (reflète la réalité, pontons compris). >0 = lissage Douglas-Peucker.
+    gps:{minStep:5, maxJump:150, relocate:4000},       // vrai GPS : anti-bruit (m mini comptés), anti-saut (m maxi/relevé), distance de refondation du monde
   };
+  // DEV = version TEST (mode simulation visible) ; sinon version DISTRIBUABLE (vrai GPS, sim caché).
+  // Test si ?dev / ?sim dans l'URL, ou ouverture locale (file://, localhost). ?prod force la version distribuable.
+  const DEV=(function(){try{const q=new URLSearchParams(location.search);
+    if(q.has('prod'))return false; if(q.has('dev')||q.has('sim'))return true;
+    const h=location.hostname;return location.protocol==='file:'||h===''||h==='localhost'||h==='127.0.0.1';}catch(_){return false;}})();
+  try{if(!DEV)document.body.classList.add('prod');}catch(_){}
   const TITLES=[{min:1,name:'Vagabond'},{min:2,name:'Éclaireur des Lisières'},{min:4,name:'Arpenteur des Combes'},
     {min:6,name:'Cartographe des Marches'},{min:9,name:'Découvreur'},{min:12,name:'Grand Explorateur'},{min:16,name:'Maître des 1001 Pas'}];
   const ACHIEVEMENTS=[
@@ -1044,24 +1052,30 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // recharge OSM autour du joueur au fil de l'exploration (enrichit noms + lieux partout)
   function maybeFetchArea(){if(!world)return;const p=state.pl;if(lastFetch&&Math.hypot(p.x-lastFetch.x,p.y-lastFetch.y)<CONFIG.osm.refetch)return;
     lastFetch={x:p.x,y:p.y};const ll=mToLngLat(p.x,p.y);loadArea([ll[0],ll[1]]);} // les contrées (zones) sont gérées par ensureZone()
+  // Suite d'un déplacement (traînée, découverte de contrée, sites atteints, itinéraire, succès) —
+  // PARTAGÉE par la SIMULATION (joystick, version test) et le VRAI GPS (watchPosition, version distribuable).
+  function afterMove(){
+    const lp=trail[trail.length-1];if(!lp||Math.hypot(state.pl.x-lp.x,state.pl.y-lp.y)>=CONFIG.trail.minDist){trail.push({x:state.pl.x,y:state.pl.y});if(trail.length>CONFIG.trail.max)trail.shift();}
+    discoverZone(zoneAt(state.pl.x,state.pl.y));
+    const pc=cellIndexOf(state.pl.x,state.pl.y);
+    for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){const arr=world.poiByCell.get(regionKey(pc.i+di,pc.j+dj));if(!arr)continue;
+      for(const P of arr){if(state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&z.discovered&&Math.hypot(state.pl.x-P.x,state.pl.y-P.y)<CONFIG.poi.reachRadius)reachPOI(P,z);}}
+    if(route){const dm=Math.hypot(route.x-state.pl.x,route.y-state.pl.y);
+      if(dm<CONFIG.route.arrive){toast('r','◈','Destination atteinte',route.name);clearRoute();}
+      else if(route.ffx!=null&&Math.hypot(state.pl.x-route.ffx,state.pl.y-route.ffy)>30)doRouteFetch();} // réajuste depuis la position
+    if(state.dist>40)hint.classList.add('gone'); // le bandeau d'accueil disparaît après les premiers vrais pas
+    checkAch();maybeFetchArea();
+  }
   function update(dt){
     ensureZone(); // va chercher la vraie forme de la contrée où l'on est (si pas déjà chargée)
     for(const Z of world.communes)if(Z.discovered&&Z.rev>0)Z.rev=Math.max(0,Z.rev-dt/CONFIG.fogLift);
     let dx=0,dy=0;
-    if(control.joy.active){dx=control.joy.x;dy=-control.joy.y;} // écran bas = sud
-    else{if(control.auto&&!control.target)control.target=wanderTarget();if(control.target){const ox=control.target.x-state.pl.x,oy=control.target.y-state.pl.y,d=Math.hypot(ox,oy);if(d<CONFIG.arriveEps)control.target=null;else{dx=ox/d;dy=oy/d;}}}
+    if(DEV){ // déplacement SIMULÉ (joystick / marche auto / clic-cible) — version TEST uniquement ; en distribuable c'est le GPS qui bouge l'avatar
+      if(control.joy.active){dx=control.joy.x;dy=-control.joy.y;} // écran bas = sud
+      else{if(control.auto&&!control.target)control.target=wanderTarget();if(control.target){const ox=control.target.x-state.pl.x,oy=control.target.y-state.pl.y,d=Math.hypot(ox,oy);if(d<CONFIG.arriveEps)control.target=null;else{dx=ox/d;dy=oy/d;}}}
+    }
     const mag=Math.hypot(dx,dy);let moved=false;
-    if(mag>0.001){const s=CONFIG.speed.base*speedMult*dt;state.pl.x+=dx*s;state.pl.y+=dy*s;state.dist+=mag*s;dirty=true;moved=true;
-      const lp=trail[trail.length-1];if(!lp||Math.hypot(state.pl.x-lp.x,state.pl.y-lp.y)>=CONFIG.trail.minDist){trail.push({x:state.pl.x,y:state.pl.y});if(trail.length>CONFIG.trail.max)trail.shift();}
-      discoverZone(zoneAt(state.pl.x,state.pl.y));
-      const pc=cellIndexOf(state.pl.x,state.pl.y);
-      for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){const arr=world.poiByCell.get(regionKey(pc.i+di,pc.j+dj));if(!arr)continue;
-        for(const P of arr){if(state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&z.discovered&&Math.hypot(state.pl.x-P.x,state.pl.y-P.y)<CONFIG.poi.reachRadius)reachPOI(P,z);}}
-      if(route){const dm=Math.hypot(route.x-state.pl.x,route.y-state.pl.y);
-        if(dm<CONFIG.route.arrive){toast('r','◈','Destination atteinte',route.name);clearRoute();}
-        else if(route.ffx!=null&&Math.hypot(state.pl.x-route.ffx,state.pl.y-route.ffy)>30)doRouteFetch();} // réajuste depuis la position
-      if(state.dist>40)hint.classList.add('gone'); // le bandeau d'accueil disparaît après les premiers vrais pas
-      checkAch();maybeFetchArea();}
+    if(mag>0.001){const s=CONFIG.speed.base*speedMult*dt;state.pl.x+=dx*s;state.pl.y+=dy*s;state.dist+=mag*s;dirty=true;moved=true;afterMove();}
     return moved;
   }
 
@@ -1287,6 +1301,38 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(ready&&world){const moved=update(dt);if(moved&&follow)map.setCenter(playerLngLat());updateHUD();map.triggerRepaint();}
     requestAnimationFrame(frame);}
 
+  // ---- VRAI GPS (version distribuable) : la position réelle du téléphone pilote l'avatar ----
+  let geoWatch=null, geoFirst=true;
+  function setHint(txt){if(txt){hint.textContent=txt;hint.classList.remove('gone');}}
+  function applyGpsFix(lng,lat,acc){
+    if(!world||!ready)return;
+    if(geoFirst){geoFirst=false; // 1er relevé : on se place (sans effacer une progression existante)
+      const m=lngLatToM(lng,lat), dCtr=Math.hypot(m.x,m.y);
+      if(state.discR.size===0 && dCtr>CONFIG.gps.relocate){ goTo(lng,lat,'Ma position'); } // aucune progression + loin → on FONDE le monde ici
+      else{ state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show');
+            map.setCenter([lng,lat]);map.setZoom(Math.max(map.getZoom(),CONFIG.defaultZoom));revealStart();maybeFetchArea(); }
+      dirty=true;afterMove();save();return;
+    }
+    const dCtr=Math.hypot((lng-world.C.lng)*world.lngM,(lat-world.C.lat)*LATM);
+    if(state.discR.size===0 && dCtr>CONFIG.gps.relocate){goTo(lng,lat,'Ma position');dirty=true;afterMove();return;}
+    const m=lngLatToM(lng,lat), step=Math.hypot(m.x-state.pl.x,m.y-state.pl.y);
+    state.pl.x=m.x;state.pl.y=m.y;
+    if(step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // ignore le bruit GPS (immobile) et les sauts aberrants
+    dirty=true;afterMove();if(follow)map.setCenter(playerLngLat());
+  }
+  function onGeoErr(err){
+    if(err&&err.code===1) setHint('Autorise la localisation pour explorer en marchant.');
+    else if(err&&err.code===3) setHint('Signal GPS faible — mets-toi à l\'air libre.');
+    else setHint('Position introuvable pour l\'instant.');
+  }
+  function startGeo(){
+    if(geoWatch!=null)return;
+    if(!navigator.geolocation){setHint('Ce téléphone ne fournit pas de position.');return;}
+    geoWatch=navigator.geolocation.watchPosition(
+      p=>applyGpsFix(p.coords.longitude,p.coords.latitude,p.coords.accuracy||999),
+      onGeoErr,{enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+  }
+
   // récolte des tuiles (throttlée) : lieux + noms de quartiers INSTANTANÉS dès que des tuiles arrivent
   let harvestT=0;
   function harvestSoon(){const n=performance.now();if(n-harvestT<600)return;harvestT=n;harvestTiles();}
@@ -1307,6 +1353,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     loadArea(C,ok=>{if(ok){lastFetch={x:state.pl.x,y:state.pl.y};save();}}); // Overpass = enrichissement (fontaines, tags wiki…)
     loadZoneCache();                     // ré-ingère les contrées déjà visitées (cache) ; ensureZone() ira chercher la contrée courante (Nominatim)
     hint.classList.toggle('gone',state.dist>40);
+    if(!DEV)startGeo();                   // version distribuable : le vrai GPS pilote l'avatar (demande l'autorisation de localisation)
     requestAnimationFrame(frame);
   });
   map.on('error',e=>{console.warn('maplibre error',e&&e.error&&e.error.message);});
