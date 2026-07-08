@@ -108,9 +108,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     cursor:pointer;font-family:var(--display);font-size:20px;color:#4a3421;padding:0;display:flex;align-items:center;justify-content:center;}
   #zoomStack button:active{background:rgba(164,36,59,.12);}
   #zoomVal{font-family:var(--display);font-size:11px;font-weight:700;color:#7c5a17;text-align:center;line-height:1;padding:1px 0 3px;font-variant-numeric:tabular-nums;}
-  #compass{left:16px;bottom:118px;pointer-events:none;opacity:.8;}
+  #compass{right:14px;top:14px;pointer-events:none;opacity:.85;}
 
-  #simBtn{top:14px;right:13px;width:42px;height:42px;border-radius:50%;padding:0;font-size:17px;cursor:pointer;
+  #simBtn{top:64px;right:14px;width:42px;height:42px;border-radius:50%;padding:0;font-size:17px;cursor:pointer;
     display:flex;align-items:center;justify-content:center;}
   #simPanel{left:12px;right:12px;bottom:12px;max-width:440px;margin:0 auto;padding:15px 16px 17px;z-index:12;
             transform:translateY(160%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:78vh;overflow:auto;}
@@ -182,9 +182,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #hint.gone{opacity:0;}
   #loadChip{top:64px;left:50%;transform:translateX(-50%);padding:5px 13px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
   #loadChip.show{opacity:1;}
-  #recenterBtn{bottom:96px;left:50%;transform:translateX(-50%) translateY(8px);padding:9px 18px;border-radius:20px;
-    font-family:var(--display);font-size:10.5px;font-weight:700;letter-spacing:.1em;cursor:pointer;opacity:0;transition:.25s;pointer-events:none;}
-  #recenterBtn.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+  #recenterBtn{left:16px;bottom:20px;width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
+    background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 6px 16px rgba(40,24,6,.3);
+    display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;
+    opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none;}
+  #recenterBtn.show{opacity:1;transform:translateY(0);pointer-events:auto;}
+  body:not(.prod) #recenterBtn{bottom:116px;}    /* en test : au-dessus du joystick */
+  body.prod #zoomStack{display:none;}             /* distribuable : pas de +/- (pinch-zoom au doigt, intuitif) */
 
   /* ── barre d'itinéraire ── */
   #routeBar{bottom:150px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:9px;max-width:calc(100vw - 24px);box-sizing:border-box;
@@ -368,7 +372,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   <div id="hint" class="hud">Marchez — la brume se lève sur vos pas.</div>
   <div id="loadChip" class="hud card">⏳ Chargement des sites…</div>
-  <button id="recenterBtn" class="hud card">◎ Recentrer</button>
+  <button id="recenterBtn" class="hud" aria-label="Recentrer sur ma position">
+    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" fill="none" stroke="#4a3421" stroke-width="2"/><path d="M12 2.5v3.4 M12 18.1v3.4 M2.5 12h3.4 M18.1 12h3.4" stroke="#4a3421" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
 
   <div id="poiPanel" class="hud">
     <div class="pp-grab"></div>
@@ -815,7 +821,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   let tip=null;     // infobulle éphémère sur un lieu non débloqué : {x,y,until}
   // La carte SUIT le joueur, mais on peut la déplacer librement (le suivi se coupe) → bouton « Recentrer »
   const recenterBtn=document.getElementById('recenterBtn');
-  recenterBtn.onclick=()=>{follow=true;recenterBtn.classList.remove('show');if(world)map.setCenter(playerLngLat());};
+  recenterBtn.onclick=()=>{follow=true;recenterBtn.classList.remove('show');if(world)map.setCenter(playerLngLat());if(!DEV)startGeo();}; // relance aussi le GPS au besoin
   // Toute interaction manuelle (glisser/zoom) débraye le suivi immédiatement → la carte reste libre
   map.on('movestart',e=>{if(e&&e.originalEvent){follow=false;recenterBtn.classList.add('show');}});
   map.on('click',e=>{
@@ -824,9 +830,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     {const px=e.point.x,py=e.point.y;let best=null,bestR=null,bestD=26;
       for(const Z of world.communes){if(!Z.discovered)continue;for(const P of Z.pois){const pp=proj(P.x,P.y);const d=Math.hypot(pp.x-px,pp.y-py);if(d<bestD){bestD=d;best=P;bestR=Z;}}}
       if(best){if(state.discP.has(best.id)){openPOI(best,bestR);return;}
-        // lieu encore dans la brume → on trace l'ITINÉRAIRE depuis notre position (et on s'y dirige en sim)
-        setRoute(best.x,best.y,best.n);tip={x:best.x,y:best.y,until:performance.now()+2200};control.target={x:best.x,y:best.y};return;}}
-    const m=lngLatToM(e.lngLat.lng,e.lngLat.lat);control.target={x:m.x,y:m.y};});
+        // site encore dans la brume → on trace l'ITINÉRAIRE vers lui (aide à s'y rendre) ; le déplacement AUTO vers la cible = SIM uniquement
+        setRoute(best.x,best.y,best.n);tip={x:best.x,y:best.y,until:performance.now()+2200};if(DEV)control.target={x:best.x,y:best.y};return;}}
+    if(DEV){const m=lngLatToM(e.lngLat.lng,e.lngLat.lat);control.target={x:m.x,y:m.y};}}); // distribuable : toucher la carte à vide ne fait rien (pas de « clic pour marcher »)
   // ── itinéraire qui suit les VRAIES ROUTES (OSRM profil piéton, service libre sans clé) ──
   const routeBar=document.getElementById('routeBar'),rbName=document.getElementById('rbName'),rbPas=document.getElementById('rbPas');
   let routeReq=0;
@@ -1312,7 +1318,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       if(!bootHadSave){ setLocation(lng,lat); } // NOUVEAU joueur → on FONDE le monde À sa position réelle (carte propre, aucune contrée fantôme du centre par défaut)
       else{ const m=lngLatToM(lng,lat); state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show'); // joueur EXISTANT → on garde la progression, on se place juste dessus
             map.setCenter([lng,lat]);map.setZoom(Math.max(map.getZoom(),CONFIG.defaultZoom));revealStart();maybeFetchArea(); }
-      dirty=true;afterMove();save();return;
+      dirty=true;afterMove();save();toast('r','◈','Position acquise','Le GPS te suit maintenant');return;
     }
     const m=lngLatToM(lng,lat), step=Math.hypot(m.x-state.pl.x,m.y-state.pl.y);
     state.pl.x=m.x;state.pl.y=m.y;
