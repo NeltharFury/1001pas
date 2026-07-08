@@ -722,7 +722,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   }
 
   // ---- État ----
-  const SAVE_KEY='pas1001_realmap_v3';
+  // Sauvegarde SÉPARÉE test/distribuable : la version distribuable démarre TOUJOURS vierge (progression propre),
+  // les parties de simulation (test) ne polluent pas ce que verront les vrais joueurs.
+  const SAVE_KEY='pas1001_realmap_v3'+(DEV?'':'_prod');
   const state={pl:{x:0,y:0},xp:0,dist:0,pseudo:'Voyageur',discR:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set()};
   const trail=[]; let dirty=false,prevLevel=1,prevTitle=TITLES[0].name;
 
@@ -1302,19 +1304,16 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     requestAnimationFrame(frame);}
 
   // ---- VRAI GPS (version distribuable) : la position réelle du téléphone pilote l'avatar ----
-  let geoWatch=null, geoFirst=true;
+  let geoWatch=null, geoFirst=true, bootHadSave=false;
   function setHint(txt){if(txt){hint.textContent=txt;hint.classList.remove('gone');}}
   function applyGpsFix(lng,lat,acc){
     if(!world||!ready)return;
-    if(geoFirst){geoFirst=false; // 1er relevé : on se place (sans effacer une progression existante)
-      const m=lngLatToM(lng,lat), dCtr=Math.hypot(m.x,m.y);
-      if(state.discR.size===0 && dCtr>CONFIG.gps.relocate){ goTo(lng,lat,'Ma position'); } // aucune progression + loin → on FONDE le monde ici
-      else{ state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show');
+    if(geoFirst){geoFirst=false; // 1er relevé GPS
+      if(!bootHadSave){ setLocation(lng,lat); } // NOUVEAU joueur → on FONDE le monde À sa position réelle (carte propre, aucune contrée fantôme du centre par défaut)
+      else{ const m=lngLatToM(lng,lat); state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show'); // joueur EXISTANT → on garde la progression, on se place juste dessus
             map.setCenter([lng,lat]);map.setZoom(Math.max(map.getZoom(),CONFIG.defaultZoom));revealStart();maybeFetchArea(); }
       dirty=true;afterMove();save();return;
     }
-    const dCtr=Math.hypot((lng-world.C.lng)*world.lngM,(lat-world.C.lat)*LATM);
-    if(state.discR.size===0 && dCtr>CONFIG.gps.relocate){goTo(lng,lat,'Ma position');dirty=true;afterMove();return;}
     const m=lngLatToM(lng,lat), step=Math.hypot(m.x-state.pl.x,m.y-state.pl.y);
     state.pl.x=m.x;state.pl.y=m.y;
     if(step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // ignore le bruit GPS (immobile) et les sauts aberrants
@@ -1343,6 +1342,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   map.on('load',()=>{
     map.on('styleimagemissing',ev=>{try{if(!map.hasImage(ev.id))map.addImage(ev.id,{width:1,height:1,data:new Uint8Array(4)});}catch(_){}});
     let saved=null;try{saved=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');}catch(e){}
+    bootHadSave=!!saved;                  // nouveau joueur vs joueur existant → le 1er relevé GPS refonde ou conserve
     const C=(saved&&saved.C)?saved.C:CONFIG.defaultCenter;
     initWorld(C);
     if(saved)applySaved(saved);
