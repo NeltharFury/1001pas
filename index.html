@@ -108,9 +108,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     cursor:pointer;font-family:var(--display);font-size:20px;color:#4a3421;padding:0;display:flex;align-items:center;justify-content:center;}
   #zoomStack button:active{background:rgba(164,36,59,.12);}
   #zoomVal{font-family:var(--display);font-size:11px;font-weight:700;color:#7c5a17;text-align:center;line-height:1;padding:1px 0 3px;font-variant-numeric:tabular-nums;}
-  #compass{right:14px;top:14px;pointer-events:none;opacity:.85;}
+  #compass{right:13px;top:12px;pointer-events:none;opacity:.85;}
+  #compass svg{width:70px;height:70px;display:block;}   /* aussi haute que la fenêtre de profil (haut-gauche) */
 
-  #simBtn{top:64px;right:14px;width:42px;height:42px;border-radius:50%;padding:0;font-size:17px;cursor:pointer;
+  #simBtn{top:96px;right:14px;width:42px;height:42px;border-radius:50%;padding:0;font-size:17px;cursor:pointer;
     display:flex;align-items:center;justify-content:center;}
   #simPanel{left:12px;right:12px;bottom:12px;max-width:440px;margin:0 auto;padding:15px 16px 17px;z-index:12;
             transform:translateY(160%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:78vh;overflow:auto;}
@@ -180,8 +181,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         padding:7px 18px;border-radius:11px;background:rgba(62,43,22,.88);box-shadow:0 8px 22px rgba(30,18,4,.4);
         font-style:italic;font-size:12.5px;color:#f2e5c4;white-space:nowrap;transition:opacity .6s;animation:floatY 5s ease-in-out infinite;}
   #hint.gone{opacity:0;}
-  #loadChip{top:64px;left:50%;transform:translateX(-50%);padding:5px 13px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+  #loadChip{top:122px;left:50%;transform:translateX(-50%);padding:5px 13px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
   #loadChip.show{opacity:1;}
+  #gpsChip{top:90px;left:50%;transform:translateX(-50%);padding:5px 14px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;z-index:9;}
+  #gpsChip.show{opacity:1;}
   #recenterBtn{left:16px;bottom:20px;width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
     background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 6px 16px rgba(40,24,6,.3);
     display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;
@@ -370,6 +373,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   <div id="hint" class="hud">Marchez — la brume se lève sur vos pas.</div>
   <div id="loadChip" class="hud card">⏳ Chargement des sites…</div>
+  <div id="gpsChip" class="hud card">GPS…</div>
   <button id="recenterBtn" class="hud" aria-label="Recentrer sur ma position">
     <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" fill="none" stroke="#4a3421" stroke-width="2"/><path d="M12 2.5v3.4 M12 18.1v3.4 M2.5 12h3.4 M18.1 12h3.4" stroke="#4a3421" stroke-width="2" stroke-linecap="round"/></svg>
   </button>
@@ -419,7 +423,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     grid:{spacing:750, jitter:230},                    // taille des contrées (MONDE ILLIMITÉ, à la volée)
     osm:{radius:1600, refetch:1000},                   // rayon requête OSM (m) + distance parcourue avant recharge
     poi:{ nameRadius:90, reachRadius:32 },
-    xp:{ perRegion:120, perPOI:80 },
+    xp:{ perPOI:100, completePerSite:10 },             // site découvert = +100 ; contrée complétée = +10 × (nb sites) ; contrée découverte = 0 ; marche = +1/pas
     fogLift:1.2, trail:{max:1400,minDist:3},
     route:{arrive:20},                                 // m : distance d'arrivée d'un itinéraire
     reveal:{here:70},                                  // m : petit halo de vision immédiate, SEULEMENT tant que la contrée n'est pas encore révélée (révélation = par ZONE)
@@ -728,7 +732,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // ---- État ----
   // Sauvegarde SÉPARÉE test/distribuable : la version distribuable démarre TOUJOURS vierge (progression propre),
   // les parties de simulation (test) ne polluent pas ce que verront les vrais joueurs.
-  const SAVE_KEY='pas1001_realmap_v3'+(DEV?'':'_prod');
+  const SAVE_KEY='pas1001_realmap_v3'+(DEV?'':'_prod2');   // _prod2 = remise à zéro de la version distribuable (nouvelle économie d'XP)
   const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',discR:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set()};
   const trail=[]; let dirty=false,prevLevel=1,prevTitle=TITLES[0].name;
 
@@ -754,20 +758,20 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Dévoile la contrée où l'on se trouve (sinon, au démarrage, la brume opaque cache toute la carte)
   function revealStart(){if(!world)return;discoverZone(zoneAt(state.pl.x,state.pl.y));}
 
-  const totalXpForLevel=L=>L<=1?0:Math.round(200*Math.pow(L-1,1.6));
+  const totalXpForLevel=L=>L<=1?0:500*(L-1)+150*(L-1)*(L-2);   // niveau L→L+1 coûte 500+300·(L-1) XP (montée régulière, jamais absurde)
   function levelInfo(xp){let L=1;while(L<999&&totalXpForLevel(L+1)<=xp)L++;const cur=totalXpForLevel(L),next=totalXpForLevel(L+1);return{level:L,frac:clamp((xp-cur)/Math.max(1,next-cur),0,1)};}
   function titleForLevel(L){let t=TITLES[0].name;for(const x of TITLES)if(L>=x.min)t=x.name;return t;}
   function nextTitle(L){for(const x of TITLES)if(x.min>L)return x;return null;}
-  function checkAch(){for(const a of ACHIEVEMENTS)if(!state.ach.has(a.id)&&a.test(state)){state.ach.add(a.id);dirty=true;toast('r','✦','Succès débloqué',a.name);}}
+  function checkAch(){}   // succès retirés (demande d'Étienne)
   const discToastNames=new Set(); // pour ne pas répéter « Contrée découverte » pour un même nom
   // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Contrée découverte »)
-  function discoverZone(Z){if(!Z||state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);state.xp+=CONFIG.xp.perRegion;dirty=true;
+  function discoverZone(Z){if(!Z||state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true; // découvrir une contrée = 0 XP (demande d'Étienne)
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Contrée découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
   function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
   function reachPOI(P,Z,silent){state.discP.add(P.id);P.tSeal=performance.now();state.xp+=CONFIG.xp.perPOI;dirty=true;
     if(!silent)toast('poi',POI_GLYPH[P.g]||'✦','Site découvert +'+CONFIG.xp.perPOI+' XP',P.n);
-    if(Z&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);state.xp+=CONFIG.xp.perRegion;toast('r','★','Contrée complétée !',Z.name+' · +'+CONFIG.xp.perRegion+' XP');}
+    if(Z&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);const bonus=Z.pois.length*CONFIG.xp.completePerSite;state.xp+=bonus;toast('r','★','Contrée complétée !',Z.name+' · +'+bonus+' XP');}
     checkAch();}
 
   // ---- Carte ----
@@ -794,6 +798,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const map=new maplibregl.Map({container:'map',style:PARCHMENT_STYLE,
     center:CONFIG.defaultCenter,zoom:CONFIG.defaultZoom,minZoom:1,maxZoom:18.5,attributionControl:{compact:true},dragRotate:false,pitchWithRotate:false});
   map.touchZoomRotate.disableRotation();
+  try{map.touchPitch.disable();}catch(_){}   // pas d'inclinaison : la carte reste à plat (sinon le calque de brume envahit tout l'écran)
   window.__pas={map:map, get state(){return state;}, get world(){return world;}, get route(){return route;}}; // poignée de test (aperçu/captures) — ne rien brancher dessus en jeu
   let ready=false;
   const appEl=document.getElementById('app'),fog=document.getElementById('fog'),fctx=fog.getContext('2d');let W=0,H=0,dpr=1;
@@ -824,13 +829,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   map.on('movestart',e=>{if(e&&e.originalEvent){follow=false;recenterBtn.classList.add('show');}});
   map.on('click',e=>{
     if(!world||!ready)return; // avant l'init du monde, un clic ne doit rien faire (lngLatToM lirait world.C)
-    // clic sur un lieu d'une contrée révélée -> fiche (scellé) ou infobulle + on y marche (à sceller) ; sinon on marche vers le point
+    // clic sur un site (verrouillé OU débloqué) → sa FICHE en feuille du BAS ; clic à vide → rien (sauf marche en SIM)
     {const px=e.point.x,py=e.point.y;let best=null,bestR=null,bestD=26;
       for(const Z of world.communes){if(!Z.discovered)continue;for(const P of Z.pois){const pp=proj(P.x,P.y);const d=Math.hypot(pp.x-px,pp.y-py);if(d<bestD){bestD=d;best=P;bestR=Z;}}}
-      if(best){if(state.discP.has(best.id)){openPOI(best,bestR);return;}
-        // site encore dans la brume → on trace l'ITINÉRAIRE vers lui (aide à s'y rendre) ; le déplacement AUTO vers la cible = SIM uniquement
-        setRoute(best.x,best.y,best.n);tip={x:best.x,y:best.y,until:performance.now()+2200};if(DEV)control.target={x:best.x,y:best.y};return;}}
-    if(DEV){const m=lngLatToM(e.lngLat.lng,e.lngLat.lat);control.target={x:m.x,y:m.y};}}); // distribuable : toucher la carte à vide ne fait rien (pas de « clic pour marcher »)
+      if(best){openPOI(best,bestR);return;}}
+    if(DEV){const m=lngLatToM(e.lngLat.lng,e.lngLat.lat);control.target={x:m.x,y:m.y};}}); // distribuable : toucher la carte à vide ne fait rien
   // ── itinéraire qui suit les VRAIES ROUTES (OSRM profil piéton, service libre sans clé) ──
   const routeBar=document.getElementById('routeBar'),rbName=document.getElementById('rbName'),rbPas=document.getElementById('rbPas');
   let routeReq=0;
@@ -1026,7 +1029,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const unlocked=state.discP.has(P.id);
     poiIcon.style.backgroundImage='url('+(unlocked?sealDataURL(P.g,46,false):lockedDataURL(P.g,46))+')';
     poiName.textContent=P.n;poiType.textContent=(P.type||'Site')+' · '+R.name;
-    poiRouteBtn.disabled=!unlocked;poiSrc.classList.add('hidden');
+    poiRouteBtn.disabled=false;poiSrc.classList.add('hidden');   // itinéraire possible même vers un site verrouillé (pour aller le découvrir)
     const my=++poiReq;
     if(!unlocked){poiBody.innerHTML='<span class="pp-lock">Site encore dans la brume — marche jusqu\'à lui pour le découvrir et lire sa fiche.</span>';return;}
     poiBody.textContent='Chargement de la fiche…';
@@ -1309,29 +1312,33 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     requestAnimationFrame(frame);}
 
   // ---- VRAI GPS (version distribuable) : la position réelle du téléphone pilote l'avatar ----
-  let geoWatch=null, geoFirst=true, bootHadSave=false;
+  let geoWatch=null, geoFirst=true, bootHadSave=false, geoWatchdog=null;
   function setHint(txt){if(txt){hint.textContent=txt;hint.classList.remove('gone');}}
+  function gpsChip(txt,show){var c=document.getElementById('gpsChip');if(!c)return;if(txt!=null)c.textContent=txt;c.classList.toggle('show',!!show);}
   function applyGpsFix(lng,lat,acc){
     if(!world||!ready)return;
-    if(geoFirst){geoFirst=false; // 1er relevé GPS
+    if(geoFirst){geoFirst=false;clearTimeout(geoWatchdog); // 1er relevé GPS
       if(!bootHadSave){ setLocation(lng,lat); } // NOUVEAU joueur → on FONDE le monde À sa position réelle (carte propre, aucune contrée fantôme du centre par défaut)
       else{ const m=lngLatToM(lng,lat); state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show'); // joueur EXISTANT → on garde la progression, on se place juste dessus
             map.setCenter([lng,lat]);map.setZoom(Math.max(map.getZoom(),CONFIG.defaultZoom));revealStart();maybeFetchArea(); }
-      dirty=true;afterMove();save();toast('r','◈','Position acquise','Le GPS te suit maintenant');return;
+      dirty=true;afterMove();save();toast('r','◈','Position acquise','Le GPS te suit maintenant');gpsChip('GPS actif · ±'+Math.round(acc)+' m',true);return;
     }
     const m=lngLatToM(lng,lat), step=Math.hypot(m.x-state.pl.x,m.y-state.pl.y);
     state.pl.x=m.x;state.pl.y=m.y;
     if(step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // ignore le bruit GPS (immobile) et les sauts aberrants
     dirty=true;afterMove();if(follow)map.setCenter(playerLngLat());
+    gpsChip('GPS actif · ±'+Math.round(acc)+' m', state.dist<25); // se cache une fois que tu as bougé (≥25 m) → preuve que ça suit
   }
-  function onGeoErr(err){
-    if(err&&err.code===1) setHint('Autorise la localisation pour explorer en marchant.');
-    else if(err&&err.code===3) setHint('Signal GPS faible — mets-toi à l\'air libre.');
-    else setHint('Position introuvable pour l\'instant.');
+  function onGeoErr(err){clearTimeout(geoWatchdog);
+    if(err&&err.code===1){setHint('Autorise la localisation pour explorer en marchant.');gpsChip('Localisation refusée — active-la (🔒) puis recharge',true);}
+    else if(err&&err.code===3){setHint('Signal GPS faible — mets-toi à l\'air libre.');gpsChip('Pas de signal GPS — va à l\'air libre',true);}
+    else{setHint('Position introuvable pour l\'instant.');gpsChip('Position introuvable pour l\'instant',true);}
   }
   function startGeo(){
     if(geoWatch!=null)return;
-    if(!navigator.geolocation){setHint('Ce téléphone ne fournit pas de position.');return;}
+    if(!navigator.geolocation){setHint('Ce téléphone ne fournit pas de position.');gpsChip('GPS indisponible sur cet appareil',true);return;}
+    gpsChip('Recherche de ta position…',true);
+    clearTimeout(geoWatchdog);geoWatchdog=setTimeout(function(){if(geoFirst)gpsChip('GPS silencieux — autorise la localisation (🔒) et va dehors',true);},14000);
     geoWatch=navigator.geolocation.watchPosition(
       p=>applyGpsFix(p.coords.longitude,p.coords.latitude,p.coords.accuracy||999),
       onGeoErr,{enableHighAccuracy:true,maximumAge:2000,timeout:20000});
