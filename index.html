@@ -346,6 +346,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="sp-row"><span>Contrées explorées</span><i></i><b id="sReg">0</b></div>
     <div class="sp-row"><span>Sites découverts</span><i></i><b id="sPoi">0 / 0</b></div>
     <div class="sp-row"><span>Contrées complétées</span><i></i><b id="sWorld">0</b></div>
+    <div class="cs-sec">État</div>
+    <div id="csStatus" class="cs-note">—</div>
   </div>
 
   <div id="progPanel" class="hud scroll">
@@ -1039,7 +1041,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const $=id=>document.getElementById(id);
   const el={pseudo:$('pTitle'),sub:$('pSub'),xp:$('xpFill'),hint:$('xpHint'),zoom:$('zoomVal'),
     csLvl:$('csLvl'),csXp:$('csXp'),csXpCur:$('csXpCur'),csXpRem:$('csXpRem'),
-    steps:$('sSteps'),reg:$('sReg'),poi:$('sPoi'),world:$('sWorld')};
+    steps:$('sSteps'),reg:$('sReg'),poi:$('sPoi'),world:$('sWorld'),status:$('csStatus')};
   const fmt=n=>Math.round(n).toLocaleString('fr-FR');
   function updateHUD(){const li=levelInfo(state.xp),L=li.level;
     const need=totalXpForLevel(L+1)-totalXpForLevel(L),cur=state.xp-totalXpForLevel(L),rem=Math.max(0,need-cur);
@@ -1050,6 +1052,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     el.csXpCur.textContent=fmt(cur)+' / '+fmt(need)+' XP';el.csXpRem.textContent='reste '+fmt(rem);
     el.reg.textContent=fmt(state.discR.size);el.poi.textContent=state.discP.size+' / '+world.knownPOIs;
     el.world.textContent=fmt(state.compR.size);
+    if(el.status)el.status.textContent=(NATIVE?'✅ App native — pas comptés par le podomètre du téléphone':'🌐 Version web (navigateur) — pas estimés par le GPS')+(lastAcc!=null?(' · GPS ±'+Math.round(lastAcc)+' m'):' · GPS en attente');
     el.steps.textContent=fmt(state.dist/0.75);
     el.zoom.textContent=map.getZoom().toFixed(1);
     if(route)rbPas.textContent='≈ '+fmt(routePas())+' PAS';
@@ -1311,12 +1314,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     requestAnimationFrame(frame);}
 
   // ---- VRAI GPS (version distribuable) : la position réelle du téléphone pilote l'avatar ----
-  let geoWatch=null, geoFirst=true, bootHadSave=false, geoWatchdog=null;
+  let geoWatch=null, geoFirst=true, bootHadSave=false, geoWatchdog=null, lastAcc=null;
   function setHint(txt){}   // plus de bandeau texte sur la carte (les messages importants passent en notif système)
   function gpsChip(txt,show){var c=document.getElementById('gpsChip');if(!c)return;if(txt!=null)c.textContent=txt;c.classList.toggle('show',!!show);}
   function gpsLabel(acc){var a=Math.round(acc);return a>40?('GPS ±'+a+' m · trop imprécis — sors dehors + localisation « précise »'):('GPS actif · ±'+a+' m');}
   function applyGpsFix(lng,lat,acc){
     if(!world||!ready)return;
+    lastAcc=acc;
     if(geoFirst){geoFirst=false;clearTimeout(geoWatchdog); // 1er relevé GPS
       if(!bootHadSave){ setLocation(lng,lat); } // NOUVEAU joueur → on FONDE le monde À sa position réelle (carte propre, aucune contrée fantôme du centre par défaut)
       else{ const m=lngLatToM(lng,lat); state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show'); // joueur EXISTANT → on garde la progression, on se place juste dessus
