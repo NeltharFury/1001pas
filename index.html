@@ -1233,6 +1233,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Registre d'étiquettes du frame courant (anti-chevauchement) : chaque nom posé réserve sa boîte à l'écran.
   const labelBoxes=[];
   function boxHit(a){for(const b of labelBoxes){if(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y)return true;}return false;}
+  // Priorité d'affichage des noms quand ça se bouscule : les sites marquants passent avant les mineurs.
+  const NAME_PRIO={view:6,peak:6,castle:6,monument:5,museum:5,ruins:4,worship:3,art:3,curio:2,fountain:1};
   function cartouche(cx,cy,label,av){fctx.font='700 11px '+FONT_DISPLAY;fctx.letterSpacing='2px';
     const tw=fctx.measureText(label).width,w=tw+26,h=22;
     labelBoxes.push({x:cx-w/2,y:cy-h/2,w:w,h:h});   // les noms de sites éviteront le nom de la contrée
@@ -1329,9 +1331,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
           if(sc>0.001){fctx.save();if(sc!==1){fctx.translate(pp.x,pp.y);fctx.scale(sc,sc);fctx.translate(-pp.x,-pp.y);}
             drawSeal(fctx,pp.x,pp.y,12,GLYPH_P[P.g]||GLYPH_P.curio,poiPhase(P.id),av);fctx.restore();}
         }else drawLocked(pp.x,pp.y,GLYPH_P[P.g]||GLYPH_P.curio,av);
-        if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?17:14,disc:disc,prox:prox,av:av});}}
-    // 3) placement glouton : débloqués d'abord puis de haut en bas ; on saute tout nom qui en chevauche un déjà posé (le sceau reste)
-    nameCands.sort((a,b)=>(b.disc-a.disc)||(a.y-b.y));
+        if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?17:14,disc:disc,prox:prox,av:av,g:P.g});}}
+    // 3) placement glouton : débloqués d'abord, puis sites marquants, puis de haut en bas ; on saute tout nom qui en chevauche un déjà posé (le sceau reste)
+    nameCands.sort((a,b)=>(b.disc-a.disc)||((NAME_PRIO[b.g]||0)-(NAME_PRIO[a.g]||0))||(a.y-b.y));
     fctx.font='600 10.5px '+FONT_SERIF;
     for(const c of nameCands){const nw=fctx.measureText(c.nm).width,bx={x:c.x-nw/2-6,y:c.y+c.oy,w:nw+12,h:15};
       if(boxHit(bx))continue; labelBoxes.push(bx);
