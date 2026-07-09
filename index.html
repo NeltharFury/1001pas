@@ -48,7 +48,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='420' height='420'><filter id='m' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='4'/><feColorMatrix type='matrix' values='0 0 0 0 0.44  0 0 0 0 0.32  0 0 0 0 0.15  0 0 0 0.13 0'/></filter><rect width='420' height='420' filter='url(%23m)'/></svg>"),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='2'/><feColorMatrix type='matrix' values='0 0 0 0 0.3  0 0 0 0 0.22  0 0 0 0 0.1  0 0 0 0.06 0'/></filter><rect width='240' height='240' filter='url(%23g)'/></svg>");}
   .maplibregl-ctrl-bottom-left{z-index:6;}   /* le « i » d'attribution PASSE PAR-DESSUS la brume (#fog z2 / #grain z3) — sinon il disparaît sous le voile */
-  .maplibregl-ctrl-attrib{font-size:9px;opacity:.7;}
+  /* « i » d'attribution (élément <details>/<summary>) au STYLE de l'interface (parchemin) + plus de liseré bleu de focus */
+  .maplibregl-ctrl-attrib{font-size:9px;background:rgba(247,237,210,.92)!important;border:1px solid rgba(74,52,33,.38);border-radius:11px;box-shadow:0 3px 10px rgba(40,24,6,.22);}
+  .maplibregl-ctrl-attrib-button,.maplibregl-ctrl-attrib summary{outline:none!important;}
+  .maplibregl-ctrl-attrib-button:focus,.maplibregl-ctrl-attrib-button:focus-visible,.maplibregl-ctrl-attrib summary:focus,.maplibregl-ctrl-attrib summary:focus-visible{outline:none!important;box-shadow:none!important;}
+  .maplibregl-ctrl-attrib a{color:#6b5233;}
 
   .hud{position:absolute;z-index:5;}
   .card{background:var(--panelG);border:1px solid rgba(74,52,33,.5);border-radius:12px;box-shadow:var(--panelSh);color:var(--ink);}
@@ -139,7 +143,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #compass{right:13px;top:12px;pointer-events:none;opacity:.85;}
   #compass svg{width:70px;height:70px;display:block;}   /* aussi haute que la fenêtre de profil (haut-gauche) */
 
-  #simBtn{left:16px;bottom:20px;font-size:21px;cursor:pointer;z-index:6;}   /* test : même taille que les autres boutons, en bas à gauche, par-dessus tout */
+  #simBtn{right:78px;bottom:20px;font-size:21px;cursor:pointer;z-index:6;}   /* test : même taille que les autres boutons, en bas à DROITE (à côté de la pile), par-dessus tout */
   #simPanel{left:12px;right:12px;bottom:12px;max-width:440px;margin:0 auto;padding:15px 16px 17px;z-index:12;
             transform:translateY(160%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:78vh;overflow:auto;}
   #simPanel.open{transform:translateY(0);}
@@ -1323,6 +1327,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       fctx.beginPath();zonePath(Z);fctx.lineJoin='round';fctx.lineCap='round';
       fctx.strokeStyle='rgba(74,52,33,'+(0.5*av)+')';fctx.lineWidth=2.4;fctx.stroke();
       fctx.strokeStyle='rgba(185,138,46,'+(0.95*av)+')';fctx.lineWidth=1.1;fctx.stroke();}
+    // RELIEF de la zone courante quand la progression est ouverte : on voit TOUTE son étendue (même fragmentée en plusieurs morceaux)
+    if(z>=12&&progPanel.classList.contains('open')){var hz=zoneAt(state.pl.x,state.pl.y);
+      if(hz&&hz.discovered){var pulse=0.5+0.5*Math.sin(now/380);
+        fctx.beginPath();zonePath(hz);fctx.lineJoin='round';fctx.lineCap='round';
+        fctx.fillStyle='rgba(185,138,46,'+(0.10+0.07*pulse)+')';fctx.fill();          // remplissage or translucide qui « respire »
+        fctx.strokeStyle='rgba(164,36,59,'+(0.75+0.2*pulse)+')';fctx.lineWidth=3.6;fctx.stroke(); // liseré carmin épais (accent de l'appli)
+        fctx.strokeStyle='rgba(243,231,198,0.9)';fctx.lineWidth=1.2;fctx.stroke();}}   // filet crème par-dessus
     fctx.textAlign='center';fctx.textBaseline='middle';
     // 1) cartouches des contrées (un seul par nom) — dessinés d'abord : les noms de sites leur céderont la place
     labelBoxes.length=0;
