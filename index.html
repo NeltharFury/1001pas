@@ -47,7 +47,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #grain{position:absolute;inset:0;pointer-events:none;z-index:3;mix-blend-mode:multiply;opacity:.5;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='420' height='420'><filter id='m' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='4'/><feColorMatrix type='matrix' values='0 0 0 0 0.44  0 0 0 0 0.32  0 0 0 0 0.15  0 0 0 0.13 0'/></filter><rect width='420' height='420' filter='url(%23m)'/></svg>"),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='2'/><feColorMatrix type='matrix' values='0 0 0 0 0.3  0 0 0 0 0.22  0 0 0 0 0.1  0 0 0 0.06 0'/></filter><rect width='240' height='240' filter='url(%23g)'/></svg>");}
-  .maplibregl-ctrl-attrib{font-size:9px;opacity:.6;}
+  .maplibregl-ctrl-bottom-left{z-index:6;}   /* le « i » d'attribution PASSE PAR-DESSUS la brume (#fog z2 / #grain z3) — sinon il disparaît sous le voile */
+  .maplibregl-ctrl-attrib{font-size:9px;opacity:.7;}
 
   .hud{position:absolute;z-index:5;}
   .card{background:var(--panelG);border:1px solid rgba(74,52,33,.5);border-radius:12px;box-shadow:var(--panelSh);color:var(--ink);}
@@ -332,8 +333,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <button id="recenterBtn" aria-label="Recentrer sur ma position">
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" fill="none" stroke="#4a3421" stroke-width="2"/><path d="M12 2.5v3.4 M12 18.1v3.4 M2.5 12h3.4 M18.1 12h3.4" stroke="#4a3421" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
-    <button id="progBtn" aria-label="Complétion de la contrée">
-      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5 h8.5 L18.5 7.5 V20.5 H6 Z M14.5 3.5 V7.5 H18.5 M8.6 11.4 h7 M8.6 14.4 h7 M8.6 17.2 h4.4" fill="none" stroke="#4a3421" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <button id="progBtn" aria-label="Progression de la zone">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 L19 6 V11 C19 16 12 21 12 21 C12 21 5 16 5 11 V6 Z" fill="none" stroke="#4a3421" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.8 11.7 L11 14 L15.4 8.9" fill="none" stroke="#b98a2e" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <button id="searchOpenBtn" aria-label="Rechercher un site débloqué">
       <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 5 a5.5 5.5 0 1 0 0.01 0 M14.6 14.7 L19.5 19.6" fill="none" stroke="#4a3421" stroke-width="2" stroke-linecap="round"/></svg>
@@ -381,9 +382,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <input type="file" id="photoInput" accept="image/*" hidden>
     <div class="cs-sec">Parcours</div>
     <div class="sp-row"><span>Pas</span><i></i><b id="sSteps">0</b></div>
-    <div class="sp-row"><span>Contrées explorées</span><i></i><b id="sReg">0</b></div>
+    <div class="sp-row"><span>Zones explorées</span><i></i><b id="sReg">0</b></div>
     <div class="sp-row"><span>Sites découverts</span><i></i><b id="sPoi">0 / 0</b></div>
-    <div class="sp-row"><span>Contrées complétées</span><i></i><b id="sWorld">0</b></div>
+    <div class="sp-row"><span>Zones complétées</span><i></i><b id="sWorld">0</b></div>
   </div>
 
   <div id="progPanel" class="hud scroll">
@@ -439,7 +440,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       </svg>
       <h1>1001 Pas</h1>
       <div class="sub">atlas enluminé de votre vie</div>
-      <p>Ta vraie vie devient une carte que tu révèles en marchant. Avance pour lever la brume, découvrir tes contrées et leurs sites.</p>
+      <p>Ta vraie vie devient une carte que tu révèles en marchant. Avance pour lever la brume, découvrir tes zones et leurs sites.</p>
       <p class="tip">Astuce : ouvre <b>⚙</b> (en haut à droite) → <b>cherche ta ville</b> pour explorer ton quartier, ou lance la <b>marche auto</b>.</p>
       <button id="wcGo">EXPLORER</button>
     </div>
@@ -483,7 +484,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     {id:'cartographe',name:'Cartographe',ic:'❖',test:st=>st.discR.size>=10},
     {id:'curieux',name:'Curieux',ic:'⛲',test:st=>st.discP.size>=5},
     {id:'collectionneur',name:'Collectionneur',ic:'⛲',test:st=>st.discP.size>=25},
-    {id:'contree-complete',name:'Contrée complétée',ic:'★',test:st=>st.compR.size>=1}
+    {id:'contree-complete',name:'Zone complétée',ic:'★',test:st=>st.compR.size>=1}
   ];
   function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
   function clipHalf(poly,nx,ny,c){const out=[],N=poly.length;for(let i=0;i<N;i++){const cur=poly[i],nxt=poly[(i+1)%N];
@@ -693,7 +694,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     else if(g.type==='MultiPolygon'){poly=[];for(const pg of g.coordinates)for(const ring of pg)poly.push(ring);}
     if(!poly||!poly.length)return null; // Point (pas de polygone) → on ignore, on retentera
     const ad=d.address||{};
-    return {id:'c'+d.osm_id,name:d.name||ad.city||ad.town||ad.village||ad.municipality||'Contrée',lvl:+((d.extratags||{}).admin_level)||8,poly:poly};}
+    return {id:'c'+d.osm_id,name:d.name||ad.city||ad.town||ad.village||ad.municipality||'Zone',lvl:+((d.extratags||{}).admin_level)||8,poly:poly};}
   let zonePending=false,lastZoneTry=0;
   function reverseZone(lng,lat){if(zonePending)return;
     if(!isFinite(lat)||lat>90||lat<-90||!isFinite(lng)||lng>180||lng<-180)return; // coords invalides → on ne bloque pas
@@ -804,15 +805,15 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function titleForLevel(L){let t=TITLES[0].name;for(const x of TITLES)if(L>=x.min)t=x.name;return t;}
   function nextTitle(L){for(const x of TITLES)if(x.min>L)return x;return null;}
   function checkAch(){}   // succès retirés
-  const discToastNames=new Set(); // pour ne pas répéter « Contrée découverte » pour un même nom
-  // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Contrée découverte »)
+  const discToastNames=new Set(); // pour ne pas répéter « Zone découverte » pour un même nom
+  // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Zone découverte »)
   function discoverZone(Z){if(!Z||state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true; // découvrir une contrée = 0 XP
-    if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Contrée découverte',Z.name);}checkAch();}
+    if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
   function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
   function reachPOI(P,Z,silent){state.discP.add(P.id);P.tSeal=performance.now();state.xp+=CONFIG.xp.perPOI;dirty=true;
     if(!silent)toast('poi',POI_GLYPH[P.g]||'✦','Site découvert +'+CONFIG.xp.perPOI+' XP',P.n);
-    if(Z&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);const bonus=Z.pois.length*CONFIG.xp.completePerSite;state.xp+=bonus;toast('r','★','Contrée complétée !',Z.name+' · +'+bonus+' XP');}
+    if(Z&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);const bonus=Z.pois.length*CONFIG.xp.completePerSite;state.xp+=bonus;toast('r','★','Zone complétée !',Z.name+' · +'+bonus+' XP');}
     checkAch();}
 
   // ---- Carte ----
@@ -934,7 +935,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function renderProgress(){if(!world)return;
     const nEl=document.getElementById('pgZoneName'),sEl=document.getElementById('pgZoneSub'),bEl=document.getElementById('pgTotalBar'),tEl=document.getElementById('pgTypes');
     const Z=zoneAt(state.pl.x,state.pl.y); // complétion de la contrée où l'on SE TROUVE
-    if(!Z||!Z.discovered){nEl.textContent='Contrée inconnue';sEl.textContent='Entre dans une contrée pour voir sa complétion';bEl.style.width='0%';tEl.innerHTML='';return;}
+    if(!Z||!Z.discovered){nEl.textContent='Zone inconnue';sEl.textContent='Entre dans une zone pour voir sa progression';bEl.style.width='0%';tEl.innerHTML='';return;}
     const pois=Z.pois||[],tot=pois.length,got=pois.filter(function(p){return state.discP.has(p.id);}).length,done=state.compR.has(Z.id);
     nEl.innerHTML=escHtml(Z.name)+(done?' <span class="pz-star">★</span>':'');
     const pctz=tot?Math.round(got/tot*100):100;
@@ -945,7 +946,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     for(const t of LEGEND){const inT=pois.filter(function(p){return p.g===t.key;});if(!inT.length)continue;
       const g=inT.filter(function(p){return state.discP.has(p.id);}).length;
       h+='<div class="pg-t"><img alt="" src="'+sealDataURL(t.key,24,false)+'"><span class="pt-name">'+escHtml(t.label)+'</span><i></i><b>'+g+' / '+inT.length+'</b></div>';}
-    if(!h)h='<div class="cs-note" style="margin:4px 0 0">Aucun site répertorié dans cette contrée pour l\'instant.</div>';
+    if(!h)h='<div class="cs-note" style="margin:4px 0 0">Aucun site répertorié dans cette zone pour l\'instant.</div>';
     tEl.innerHTML=h;}
   document.getElementById('progBtn').onclick=function(){renderProgress();progPanel.classList.add('open');charSheet.classList.remove('open');var sp=document.getElementById('simPanel');if(sp)sp.classList.remove('open');};
   document.getElementById('progClose').onclick=function(){progPanel.classList.remove('open');};
@@ -969,7 +970,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   (function(){var b=document.getElementById('pedSimBtn'),note=document.getElementById('pedSimNote'); // TEST : simule des pas « app fermée » (retour à l'écran, pas besoin de marcher)
     if(b)b.onclick=function(){var r=window.__ped.simClosed(500);if(note)note.textContent='→ +'+r.simule+' pas crédités · total '+fmt(r.pas)+' pas, '+fmt(r.xp)+' XP';};})();
   (function(){var b=document.getElementById('bgSimBtn'),note=document.getElementById('bgSimNote'); // TEST : simule un trajet fait app fermée → déblocage rétroactif
-    if(b)b.onclick=function(){var r=window.__bg.simPath(600);if(note)note.textContent=(typeof r==='string')?r:('→ +'+(r.zones||0)+' contrée(s), +'+(r.sites||0)+' site(s) débloqué(s) en chemin');};})();
+    if(b)b.onclick=function(){var r=window.__bg.simPath(600);if(note)note.textContent=(typeof r==='string')?r:('→ +'+(r.zones||0)+' zone(s), +'+(r.sites||0)+' site(s) débloqué(s) en chemin');};})();
   const phoneBtn=document.getElementById('phoneBtn'); // cadre téléphone : redimensionne le conteneur puis la carte
   phoneBtn.onclick=()=>{const on=document.body.classList.toggle('phone');phoneBtn.classList.toggle('on',on);phoneBtn.textContent=on?'Actif':'Activer';
     resize();try{map.resize();}catch(_){}};
@@ -1002,7 +1003,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function escHtml(s){return (s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function discoveredPlaces(){const out=[];if(!world)return out;
     for(const p of world.pois)if(state.discP.has(p.id))out.push({name:p.n,sub:p.type||'Site',g:p.g,lng:p.lng,lat:p.lat,x:p.x,y:p.y});
-    for(const Z of world.communes)if(Z.discovered){const ll=mToLngLat(Z.cx,Z.cy);out.push({name:Z.name,sub:'Contrée',g:null,lng:ll[0],lat:ll[1],x:Z.cx,y:Z.cy});}
+    for(const Z of world.communes)if(Z.discovered){const ll=mToLngLat(Z.cx,Z.cy);out.push({name:Z.name,sub:'Zone',g:null,lng:ll[0],lat:ll[1],x:Z.cx,y:Z.cy});}
     return out;}
   const pasFrom=(x,y)=>Math.round(Math.hypot(x-state.pl.x,y-state.pl.y)/0.75); // distance joueur→lieu, en pas
   function renderSearch(){const raw=topSearch.value.trim(),q=normStr(raw);searchResults.innerHTML='';
@@ -1013,7 +1014,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const top=m.slice(0,8);
     if(!top.length){searchResults.innerHTML='<div class="sr-empty">Aucun site débloqué ne correspond. Explore la carte pour en débloquer !</div>';searchResults.classList.add('show');return;}
     top.forEach(function(it){const el=document.createElement('div');el.className='sr-item';
-      el.innerHTML='<img alt="" src="'+sealDataURL(it.g,24,it.sub==='Contrée')+'">'
+      el.innerHTML='<img alt="" src="'+sealDataURL(it.g,24,it.sub==='Zone')+'">'
         +'<div class="sr-t"><b>'+escHtml(it.name)+'</b><span class="sub">'+escHtml(it.sub)+'</span></div>'
         +'<span class="lead"></span><span class="pas">'+pasFrom(it.x,it.y).toLocaleString('fr-FR')+' pas</span>';
       el.addEventListener('click',function(){goToDiscovered(it);});searchResults.appendChild(el);});
@@ -1501,7 +1502,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       for(var p=0;p<pts.length;p++){if(Math.hypot(pts[p].x-P.x,pts[p].y-P.y)<CONFIG.poi.reachRadius){var zz=world._zoneById.get(P._zone);if(zz&&zz.discovered)reachPOI(P,zz,true);break;}}}
     return {z:state.discR.size-z0, s:state.discP.size-s0}; }
   function bgToast(z,s){ if(!z&&!s)return; var parts=[];
-    if(z)parts.push(z+' contrée'+(z>1?'s':'')); if(s)parts.push(s+' site'+(s>1?'s':''));
+    if(z)parts.push(z+' zone'+(z>1?'s':'')); if(s)parts.push(s+' site'+(s>1?'s':''));
     toast('r','❖','En chemin : '+parts.join(' · ')+' découvert'+((z+s)>1?'s':''),'Pendant que l\'app était fermée'); }
   function replayClosedPath(positions){
     if(!world||!ready||!Array.isArray(positions)||!positions.length)return {zones:0,sites:0};
