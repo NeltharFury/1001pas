@@ -405,6 +405,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="row"><div class="rl"><span>Vitesse</span><small id="spdVal">×2.0</small></div><input type="range" id="spd" min="0.5" max="8" step="0.5" value="2"></div>
     <div class="row"><div class="rl"><span>Ma position (GPS)</span><small id="gpsStat">Recentre sur toi</small></div><button class="tg2" id="gpsBtn">Aller</button></div>
     <div class="row"><div class="rl"><span>Pas « app fermée »</span><small id="pedSimNote">Simule des pas comptés hors-session (test)</small></div><button class="tg2" id="pedSimBtn">+500</button></div>
+    <div class="row"><div class="rl"><span>Trajet « app fermée »</span><small id="bgSimNote">Simule un trajet fait app fermée → débloque en chemin (test)</small></div><button class="tg2" id="bgSimBtn">+600 m</button></div>
     <div class="row"><div class="rl"><span>Réinitialiser</span><small>La brume recouvre tout</small></div><button class="tg2 danger" id="resetBtn">Effacer</button></div>
     <div class="searchrow"><input type="text" id="searchInput" placeholder="Ville, adresse ou site…"><button class="tg2" id="searchBtn">OK</button></div>
     <p class="gpsnote">Touche la carte pour marcher jusqu'à un point. Choisis ta ville ci-dessus pour explorer TON quartier. Le GPS marche sur un vrai site/app (souvent bloqué en ouverture locale de fichier).</p>
@@ -493,6 +494,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Chaque cellule (i,j) a un seed déterministe → contrées générées à la volée autour du joueur,
   // sans borne, sans serveur (100 % local). Rendu en projetant mètres → lng/lat → écran.
   let world=null;
+  let bgGen=0;   // génération du monde/progression : incrémentée à chaque (re)fondation et reset → invalide les replays différés en vol
   const REGION_CACHE=new Map();
   const regionKey=(i,j)=>i+','+j;
   function hashCell(i,j){let h=2166136261;const s=i+','+j;for(let k=0;k<s.length;k++){h^=s.charCodeAt(k);h=Math.imul(h,16777619);}return h>>>0;}
@@ -537,7 +539,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!isFinite(cells)||cells>GRID_CAP){ // fort dézoom : seulement les contrées déjà découvertes visibles
       const out=[];for(const R of REGION_CACHE.values()){if(!R.discovered)continue;if(R.bb[2]<mnx||R.bb[0]>mxx||R.bb[3]<mny||R.bb[1]>mxy)continue;out.push(R);}return {list:out,grid:false};}
     const out=[];for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)out.push(buildRegion(i,j));return {list:out,grid:true};}
-  function initWorld(C){REGION_CACHE.clear();
+  function initWorld(C){REGION_CACHE.clear();bgGen++;   // nouveau monde → tout replay différé encore en vol devient caduc
     world={C:{lng:C[0],lat:C[1]},lngM:111320*Math.cos(C[1]*Math.PI/180),places:[],commune:null,pois:[],poiByCell:new Map(),knownPOIs:0,_poiById:new Map(),_placeKeys:new Set(),
       communes:[],_commIds:new Set(),_commChunks:new Set(),_zoneById:new Map(),water:[]};}
   // clé de lieu INDÉPENDANTE de la source (tuiles vectorielles OU Overpass) → fusion + déblocage stables
@@ -964,6 +966,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   document.getElementById('closePanel').onclick=()=>panel.classList.remove('open');
   (function(){var b=document.getElementById('pedSimBtn'),note=document.getElementById('pedSimNote'); // TEST : simule des pas « app fermée » (retour à l'écran, pas besoin de marcher)
     if(b)b.onclick=function(){var r=window.__ped.simClosed(500);if(note)note.textContent='→ +'+r.simule+' pas crédités · total '+fmt(r.pas)+' pas, '+fmt(r.xp)+' XP';};})();
+  (function(){var b=document.getElementById('bgSimBtn'),note=document.getElementById('bgSimNote'); // TEST : simule un trajet fait app fermée → déblocage rétroactif
+    if(b)b.onclick=function(){var r=window.__bg.simPath(600);if(note)note.textContent=(typeof r==='string')?r:('→ +'+(r.zones||0)+' contrée(s), +'+(r.sites||0)+' site(s) débloqué(s) en chemin');};})();
   const phoneBtn=document.getElementById('phoneBtn'); // cadre téléphone : redimensionne le conteneur puis la carte
   phoneBtn.onclick=()=>{const on=document.body.classList.toggle('phone');phoneBtn.classList.toggle('on',on);phoneBtn.textContent=on?'Actif':'Activer';
     resize();try{map.resize();}catch(_){}};
@@ -974,6 +978,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const resetBtn=document.getElementById('resetBtn');let rArmed=false,rTimer=null;
   resetBtn.onclick=()=>{if(!rArmed){rArmed=true;resetBtn.textContent='Confirmer ?';resetBtn.classList.add('on');rTimer=setTimeout(()=>{rArmed=false;resetBtn.textContent='Effacer';resetBtn.classList.remove('on');},3000);return;}
     clearTimeout(rTimer);rArmed=false;resetBtn.textContent='Effacer';resetBtn.classList.remove('on');
+    bgGen++;   // reset → invalide tout replay différé encore en vol (pas de recrédit après effacement)
     state.discR.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();state.xp=0;state.dist=0;state.stepXpGiven=0;discToastNames.clear();for(const Z of world.communes){Z.discovered=false;Z.rev=1;}
     state.pl.x=0;state.pl.y=0;trail.length=0;prevLevel=1;prevTitle=TITLES[0].name;control.target=null;control.auto=false;autoBtn.classList.remove('on');autoBtn.textContent='Activer';
     clearRoute();tip=null;curPOI=null;poiPanel.classList.remove('open');follow=true;recenterBtn.classList.remove('show');
@@ -1482,6 +1487,53 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     }catch(e){window.__ped.err=''+((e&&e.message)||e);}
   }
 
+  // ---- SUIVI EN ARRIÈRE-PLAN (Partie B) : débloque contrées/sites même app FERMÉE ----
+  // Un service natif JOURNALISE les positions pendant l'absence (tampon ÉPHÉMÈRE). À la réouverture on REJOUE ce trajet
+  // pour découvrir les contrées traversées + les sites croisés, PUIS on VIDE le tampon.
+  // VIE PRIVÉE : le durable = zones/sites (comme tout le jeu) ; la trace brute n'est qu'un transit, effacé aussitôt rejoué.
+  window.__bg={native:NATIVE,plugin:false,enabled:false,replayed:0,err:''};
+  function replayUnlockPass(pts){ if(!world||!ready||!pts||!pts.length)return {z:0,s:0};
+    var z0=state.discR.size, s0=state.discP.size;
+    for(var j=0;j<pts.length;j++){var Z=zoneAt(pts[j].x,pts[j].y);if(Z)discoverZone(Z);}          // contrées CHARGÉES traversées
+    for(var k=0;k<world.pois.length;k++){var P=world.pois[k];if(state.discP.has(P.id))continue;    // sites croisés (contrée découverte + à portée)
+      for(var p=0;p<pts.length;p++){if(Math.hypot(pts[p].x-P.x,pts[p].y-P.y)<CONFIG.poi.reachRadius){var zz=world._zoneById.get(P._zone);if(zz&&zz.discovered)reachPOI(P,zz,true);break;}}}
+    return {z:state.discR.size-z0, s:state.discP.size-s0}; }
+  function bgToast(z,s){ if(!z&&!s)return; var parts=[];
+    if(z)parts.push(z+' contrée'+(z>1?'s':'')); if(s)parts.push(s+' site'+(s>1?'s':''));
+    toast('r','❖','En chemin : '+parts.join(' · ')+' découvert'+((z+s)>1?'s':''),'Pendant que l\'app était fermée'); }
+  function replayClosedPath(positions){
+    if(!world||!ready||!Array.isArray(positions)||!positions.length)return {zones:0,sites:0};
+    var pts=[];
+    for(var i=0;i<positions.length;i++){var q=positions[i];
+      if(!q||!isFinite(q.lat)||!isFinite(q.lng)||Math.abs(q.lat)>90||Math.abs(q.lng)>180)continue;
+      var m=lngLatToM(q.lng,q.lat);pts.push({x:m.x,y:m.y,lng:q.lng,lat:q.lat});}
+    if(!pts.length)return {zones:0,sites:0};
+    var z0=state.discR.size, s0=state.discP.size, myGen=bgGen;   // fige la generation : un reset / changement de monde annule les passes differees
+    var need=[]; for(var j=0;j<pts.length;j++){if(!zoneAt(pts[j].x,pts[j].y))need.push(pts[j]);} // positions hors contrées chargées → fetch async
+    replayUnlockPass(pts);
+    var end=pts[pts.length-1]; state.pl.x=end.x; state.pl.y=end.y; if(follow){try{map.setCenter([end.lng,end.lat]);}catch(_){}} // on finit là où on est vraiment
+    maybeFetchArea();
+    if(need.length){ reverseZone(need[need.length-1].lng,need[need.length-1].lat);          // n'envoie QUE la position finale à Nominatim (pas toute la trace)
+      setTimeout(function(){if(bgGen!==myGen)return;var r=replayUnlockPass(pts);if(r.z||r.s){dirty=true;save();bgToast(r.z,r.s);}},2000);
+      setTimeout(function(){if(bgGen!==myGen)return;var r=replayUnlockPass(pts);if(r.z||r.s){dirty=true;save();bgToast(r.z,r.s);}},4500); }
+    dirty=true; save();
+    var zones=state.discR.size-z0, sites=state.discP.size-s0; bgToast(zones,sites);
+    return {zones:zones,sites:sites}; }
+  // TEST (sans marcher / sans natif) : simule un trajet fait app fermée depuis la position courante
+  window.__bg.simPath=function(meters){ meters=meters||600; if(!world||!ready)return 'monde non prêt';
+    var positions=[], STEP=25, dir=0.7, mx=state.pl.x, my=state.pl.y;
+    for(var d=0;d<meters;d+=STEP){ mx+=STEP*Math.cos(dir); my+=STEP*Math.sin(dir); var ll=mToLngLat(mx,my); positions.push({lat:ll[1],lng:ll[0],t:d}); }
+    return replayClosedPath(positions); };
+  function startBackgroundTracker(){
+    try{ var C=window.Capacitor;
+      var BG=(C&&C.Plugins&&C.Plugins.BackgroundTracker) || (C&&typeof C.registerPlugin==='function'&&C.registerPlugin('BackgroundTracker'));
+      if(!BG){window.__bg.err='plugin introuvable';return;}
+      window.__bg.plugin=true;
+      BG.getBuffer().then(function(r){ var pos=(r&&r.positions)||[]; if(pos.length){var res=replayClosedPath(pos);window.__bg.replayed=(res.zones||0)+(res.sites||0);} }) // rejoue puis le natif vide le tampon
+        .catch(function(e){window.__bg.err=''+((e&&e.message)||e);});
+      BG.enable().then(function(r){window.__bg.enabled=!!(r&&r.enabled);}).catch(function(e){window.__bg.err=''+((e&&e.message)||e);}); // (re)démarre la journalisation (perm « tout le temps »)
+    }catch(e){window.__bg.err=''+((e&&e.message)||e);} }
+
   // récolte des tuiles (throttlée) : lieux + noms de quartiers INSTANTANÉS dès que des tuiles arrivent
   let harvestT=0;
   function harvestSoon(){const n=performance.now();if(n-harvestT<600)return;harvestT=n;harvestTiles();}
@@ -1505,6 +1557,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     hint.classList.toggle('gone',state.dist>40);
     if(!DEV)startGeo();                   // version distribuable : le vrai GPS pilote l'avatar (demande l'autorisation de localisation)
     if(NATIVE)startPedometer();           // app native : le capteur de pas alimente distance + XP (fiable en intérieur)
+    if(NATIVE)startBackgroundTracker();   // app native : rejoue le trajet fait app fermée (inerte si l'APK n'a pas le plugin → sans effet sur le build Play)
     requestAnimationFrame(frame);
   });
   map.on('error',e=>{console.warn('maplibre error',e&&e.error&&e.error.message);});
