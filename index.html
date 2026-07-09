@@ -1421,8 +1421,26 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       onGeoErr,{enableHighAccuracy:true,maximumAge:0,timeout:27000});
   }
   // ---- PODOMÈTRE NATIF (app Android) : compte les VRAIS pas via le capteur du téléphone, même en intérieur ----
+  // Le capteur TYPE_STEP_COUNTER compte EN CONTINU depuis le boot, que l'app soit ouverte OU FERMÉE.
+  // On mémorise le dernier cumul vu : à la réouverture, (nouveau cumul − dernier mémorisé) = les pas faits
+  // pendant l'absence → on les crédite. Ainsi les pas comptent même app fermée (la position/déblocage = Partie B).
+  const PED_TOTAL_KEY='pas1001_pedtotal'+(DEV?'':'_prod2');   // séparé test/distribuable, comme la sauvegarde
+  const PED_STEP_CAP=60000;                                   // garde-fou : jamais plus de 60 000 pas crédités d'un coup (glitch / très longue absence)
+  let pedLastTotal=(function(){try{var v=localStorage.getItem(PED_TOTAL_KEY);return v==null?null:parseFloat(v);}catch(_){return null;}})();
+  let pedPending=0, pedFirstCredit=true;                      // pas en attente si la carte n'est pas prête ; 1er crédit = lot « rattrapé »
+  function pedSaveTotal(t){try{localStorage.setItem(PED_TOTAL_KEY,String(t));}catch(_){}}
+  function pedFlush(){ if(pedPending>0&&world&&ready){ state.dist+=pedPending*0.75; pedPending=0; dirty=true; afterMove(); } } // 1 pas = 0,75 m → distance + XP
+  function pedCredit(total){                                  // total = pas cumulés depuis le boot
+    if(pedLastTotal==null){ pedLastTotal=total; pedSaveTotal(total); return; }   // 1re fois : on ancre, rien à créditer
+    if(total<pedLastTotal){ pedLastTotal=total; pedSaveTotal(total); return; }   // téléphone redémarré (compteur remis à 0) → on réancre sans créditer
+    var gained=total-pedLastTotal; if(gained<=0)return;
+    if(gained>PED_STEP_CAP)gained=PED_STEP_CAP;
+    pedLastTotal=total; pedSaveTotal(total);
+    pedPending+=gained; pedFlush();
+    if(pedFirstCredit){ pedFirstCredit=false; if(gained>=30)toast('r','✦',fmt(gained)+' pas rattrapés','Comptés pendant que l\'app était fermée'); }
+  }
   let pedStarted=false;
-  window.__ped={native:NATIVE,plugin:false,avail:null,steps:0,err:''};   // diagnostic (temporaire)
+  window.__ped={native:NATIVE,plugin:false,avail:null,steps:0,total:null,err:''};   // diagnostic (temporaire)
   function startPedometer(){
     if(pedStarted)return;pedStarted=true;
     try{
@@ -1432,8 +1450,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       if(!Ped){window.__ped.err='plugin introuvable';return;}
       window.__ped.plugin=true;
       Ped.addListener('step',function(d){
-        var delta=(d&&d.delta)||0; if(delta>0)window.__ped.steps+=delta;
-        if(delta>0&&world&&ready){state.dist+=delta*0.75;dirty=true;afterMove();} // 1 pas réel = 0,75 m → alimente distance + XP
+        if(d&&typeof d.total==='number'){ window.__ped.total=d.total; pedCredit(d.total); return; } // APK v5+ : cumul fiable (gère aussi les pas app fermée)
+        var delta=(d&&d.delta)||0; if(delta>0)window.__ped.steps+=delta;                            // repli ancien APK (sans total) : comptage live
+        if(delta>0&&world&&ready){state.dist+=delta*0.75;dirty=true;afterMove();}
       });
       Ped.start().then(function(r){window.__ped.avail=!!(r&&r.available);}).catch(function(e){window.__ped.err=''+((e&&e.message)||e);});
     }catch(e){window.__ped.err=''+((e&&e.message)||e);}

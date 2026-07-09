@@ -21,6 +21,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return; // tuiles/OSM/polices externes → réseau direct
+  if (url.pathname.endsWith('.apk')) return;  // l'APK à télécharger : toujours le réseau (jamais une version périmée en cache)
 
   const isHTML = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('index.html');
   if (isHTML) { // TOUJOURS le réseau, en contournant le cache HTTP (no-store) → jamais de version périmée ; repli cache seulement hors-ligne
