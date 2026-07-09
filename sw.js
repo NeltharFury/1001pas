@@ -1,7 +1,7 @@
 /* 1001 Pas — service worker : cache l'app + MAJ automatique.
    HTML = réseau d'abord (→ la nouvelle version arrive dès qu'on republie), repli cache hors-ligne.
    Reste (lib carte, icône, manifeste) = cache d'abord. Les tuiles/OSM externes ne sont PAS gérées ici. */
-const CACHE = 'pas1001-shell-v1';
+const CACHE = 'pas1001-shell-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg',
                './vendor/maplibre-gl.js', './vendor/maplibre-gl.css'];
 
@@ -23,10 +23,10 @@ self.addEventListener('fetch', e => {
   if (url.origin !== location.origin) return; // tuiles/OSM/polices externes → réseau direct
 
   const isHTML = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('index.html');
-  if (isHTML) { // réseau d'abord → mise à jour instantanée
-    e.respondWith(fetch(req)
-      .then(r => { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); return r; })
-      .catch(() => caches.match(req).then(m => m || caches.match('./index.html'))));
+  if (isHTML) { // TOUJOURS le réseau, en contournant le cache HTTP (no-store) → jamais de version périmée ; repli cache seulement hors-ligne
+    e.respondWith(fetch(url.pathname, { cache: 'no-store' })
+      .then(r => { const cp = r.clone(); caches.open(CACHE).then(c => c.put('./index.html', cp)); return r; })
+      .catch(() => caches.match('./index.html').then(m => m || caches.match(req))));
     return;
   }
   e.respondWith(caches.match(req).then(m => m || fetch(req).then(r => { // cache d'abord (lib stable)
