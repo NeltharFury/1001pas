@@ -1329,7 +1329,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       fctx.strokeStyle='rgba(74,52,33,'+(0.5*av)+')';fctx.lineWidth=2.4;fctx.stroke();
       fctx.strokeStyle='rgba(185,138,46,'+(0.95*av)+')';fctx.lineWidth=1.1;fctx.stroke();}
     // RELIEF de la zone courante quand la progression est ouverte : on voit TOUTE son étendue (même fragmentée en plusieurs morceaux)
-    if(z>=12&&progPanel.classList.contains('open')){var hz=zoneAt(state.pl.x,state.pl.y);
+    var progOpen=progPanel.classList.contains('open');   // progression ouverte = ACTIVE le relief + le ping sonar ; tout s'arrête à la fermeture
+    if(z>=12&&progOpen){var hz=zoneAt(state.pl.x,state.pl.y);
       if(hz&&hz.discovered){var pulse=0.5+0.5*Math.sin(now/360);
         fctx.beginPath();zonePath(hz);fctx.lineJoin='round';fctx.lineCap='round';
         fctx.fillStyle='rgba(185,138,46,'+(0.17+0.11*pulse)+')';fctx.fill();               // remplissage or bien marqué qui « respire »
@@ -1354,9 +1355,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
           else if(Z.tDisc)sc=stampScale(clamp((now-Z.tDisc-600-i*130)/550,0,1));        // contrée fraîche : sceaux frappés un à un
           if(sc>0.001){fctx.save();if(sc!==1){fctx.translate(pp.x,pp.y);fctx.scale(sc,sc);fctx.translate(-pp.x,-pp.y);}
             drawSeal(fctx,pp.x,pp.y,12,GLYPH_P[P.g]||GLYPH_P.curio,poiPhase(P.id),av);fctx.restore();}
-        }else{ var sph=(now%2400)/2400;                                    // SONAR : anneau carmin qui s'étend et s'efface (attire l'œil vers les sites à découvrir)
-          fctx.beginPath();fctx.arc(pp.x,pp.y,6+sph*16,0,TAU);
-          fctx.strokeStyle='rgba(164,36,59,'+((1-sph)*0.55*av)+')';fctx.lineWidth=1.8;fctx.stroke();
+        }else{ if(progOpen){ var sph=(now%1900)/1900, sph2=(sph+0.5)%1;   // SONAR (SEULEMENT si la progression est ouverte) : anneaux carmin qui s'étendent — plus vifs
+            fctx.beginPath();fctx.arc(pp.x,pp.y,5+sph*19,0,TAU);fctx.strokeStyle='rgba(164,36,59,'+((1-sph)*0.9*av)+')';fctx.lineWidth=2.8;fctx.stroke();
+            fctx.beginPath();fctx.arc(pp.x,pp.y,5+sph2*19,0,TAU);fctx.strokeStyle='rgba(164,36,59,'+((1-sph2)*0.6*av)+')';fctx.lineWidth=2;fctx.stroke(); }
           drawLocked(pp.x,pp.y,GLYPH_P[P.g]||GLYPH_P.curio,av); }
         if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?17:14,disc:disc,prox:prox,av:av,g:P.g});}}
     // 3) placement glouton : débloqués d'abord, puis sites marquants, puis de haut en bas ; on saute tout nom qui en chevauche un déjà posé (le sceau reste)
