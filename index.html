@@ -95,6 +95,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   .sr-item .lead{flex:1;border-bottom:1px dotted rgba(74,52,33,.4);margin:0 4px;transform:translateY(4px);min-width:12px;}
   .sr-item .pas{font-family:var(--display);font-size:10.5px;font-weight:600;color:#7c5a17;white-space:nowrap;}
   .sr-empty{color:var(--inkSoft);font-size:12.5px;font-style:italic;padding:10px 14px;}
+  .sr-mark{background:rgba(47,109,176,.07);}  /* ligne « poser un repère » (accent azur) */
+  .sr-mark .sr-mk{width:24px;height:24px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#2f6db0;font-size:16px;}
   .sr-note{padding:7px 13px;font-size:10px;font-style:italic;color:rgba(74,52,33,.6);}
 
   /* ── identité : image + pseudo + niveau + XP (toucher = fiche de personnage) ── */
@@ -223,6 +225,25 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     opacity:.35;pointer-events:none;transition:opacity .2s ease,transform .13s cubic-bezier(.2,.8,.3,1);}   /* toujours visible : GRISÉ quand on est recentré */
   #recenterBtn.show{opacity:1;pointer-events:auto;}                          /* actif quand la carte a été déplacée */
   #zoomStack{display:none;}                        /* +/- retirés (test = molette souris ; distribuable = pinch) */
+
+  /* ── REPÈRES : roue radiale (clic long) + popup ── */
+  #markerWheel{position:absolute;z-index:14;width:0;height:0;pointer-events:none;}
+  #markerWheel.open{pointer-events:auto;}
+  #markerWheel .mw-petal,#markerWheel .mw-center{position:absolute;transform:translate(-50%,-50%) scale(.2);opacity:0;
+    transition:transform .18s cubic-bezier(.2,1.35,.4,1),opacity .16s ease;border-radius:50%;border:1px solid rgba(74,52,33,.5);
+    background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.6),0 5px 14px rgba(40,24,6,.35);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
+  #markerWheel.open .mw-petal,#markerWheel.open .mw-center{transform:translate(-50%,-50%) scale(1);opacity:1;}
+  #markerWheel .mw-petal{width:46px;height:46px;left:0;top:0;}
+  #markerWheel .mw-center{width:54px;height:54px;left:0;top:0;background:linear-gradient(180deg,#a4243b,#7c1a2e);border-color:rgba(60,10,20,.6);}
+  #markerWheel .mw-petal svg{width:24px;height:24px;} #markerWheel .mw-center svg{width:26px;height:26px;}
+  #markerWheel .mw-petal:active,#markerWheel .mw-center:active{transform:translate(-50%,-50%) scale(.9);}
+  #markerPop{z-index:14;padding:11px 13px;display:none;flex-direction:column;gap:8px;min-width:150px;max-width:210px;}
+  #markerPop.show{display:flex;animation:riseIn .2s ease both;}
+  #markerPop .mp-t{font-family:var(--display);font-size:13px;color:var(--ink);}
+  #markerPop .mp-s{font-size:10.5px;color:var(--inkSoft);font-style:italic;}
+  #markerPop .mp-row{display:flex;gap:8px;}
+  #markerPop .mp-row .tg2{flex:1;}
 
   /* ── barre d'itinéraire ── */
   #routeBar{bottom:0;left:0;right:0;transform:none;display:none;align-items:center;gap:12px;box-sizing:border-box;
@@ -434,6 +455,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div id="poiSrc" class="hidden"></div>
     <div class="pp-actions"><button id="poiRoute">ITINÉRAIRE</button></div>
   </div>
+
+  <div id="markerWheel"></div>
+  <div id="markerPop" class="hud card"></div>
 
   <div id="toasts" class="hud"></div>
 
@@ -878,9 +902,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Toute interaction manuelle (glisser/zoom) débraye le suivi immédiatement → la carte reste libre
   map.on('movestart',e=>{if(e&&e.originalEvent){follow=false;recenterBtn.classList.add('show');}});
   map.on('click',e=>{
+    if(suppressClick){suppressClick=false;return;}                 // clic issu du clic long (ouverture de la roue) → ignoré
+    const _mp=markerPop();if(_mp&&_mp.classList.contains('show'))closeMarkerPop();
     if(!world||!ready)return; // avant l'init du monde, un clic ne doit rien faire (lngLatToM lirait world.C)
+    const px=e.point.x,py=e.point.y;
+    const mk=markerAtPoint(px,py);if(mk){openMarkerPop(mk);return;} // clic sur un REPÈRE → sa popup (pas + itinéraire + supprimer)
     // clic sur un site (verrouillé OU débloqué) → sa FICHE en feuille du BAS ; clic à vide → rien (sauf marche en SIM)
-    {const px=e.point.x,py=e.point.y;let best=null,bestR=null,bestD=26;
+    {let best=null,bestR=null,bestD=26;
       for(const Z of world.communes){if(!Z.discovered)continue;for(const P of Z.pois){const pp=proj(P.x,P.y);const d=Math.hypot(pp.x-px,pp.y-py);if(d<bestD){bestD=d;best=P;bestR=Z;}}}
       if(best){openPOI(best,bestR);return;}}
     if(DEV){const m=lngLatToM(e.lngLat.lng,e.lngLat.lat);control.target={x:m.x,y:m.y};}}); // distribuable : toucher la carte à vide ne fait rien
@@ -900,6 +928,79 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     rbName.textContent=name;routeBar.classList.add('show');document.body.classList.add('routing');toast('r','◈','Itinéraire tracé',name);doRouteFetch();}
   function clearRoute(){routeReq++;route=null;routeBar.classList.remove('show');document.body.classList.remove('routing');}
   document.getElementById('rbClear').onclick=clearRoute;
+
+  // ═══ REPÈRES / MARQUEURS de l'utilisateur : clic long → ROUE (pétales de types autour + ITINÉRAIRE au centre) ═══
+  // Couleur DÉDIÉE = azur (distincte de l'or des sites et du carmin du joueur). Stockés en local (lng/lat = stable même si le monde se refonde).
+  const MARKER_COLOR='#2f6db0';
+  const MGLYPHS={
+    home:'M4 12.5 L12 5.5 L20 12.5 M6.2 11 V19 H17.8 V11',
+    work:'M6 20 V8.5 H18 V20 M9 11.6 h1.6 M13.4 11.6 h1.6 M9 14.6 h1.6 M13.4 14.6 h1.6 M9 17.6 h1.6 M13.4 17.6 h1.6',
+    friend:'M12 20 C6 16 4 12.5 4 9.5 A3.4 3.4 0 0 1 12 7.4 A3.4 3.4 0 0 1 20 9.5 C20 12.5 18 16 12 20 Z',
+    flag:'M7 3.5 V21 M7.4 5 L18 8 L7.4 11.4 Z',
+    star:'M12 3.4 L14.3 9.7 L20.6 12 L14.3 14.3 L12 20.6 L9.7 14.3 L3.4 12 L9.7 9.7 Z'
+  };
+  const MROUTE='M3 11 L21 4 L14 21 L11.4 12.6 Z';   // flèche de navigation = « itinéraire jusqu'ici »
+  const MGLYPH_P={};for(const k in MGLYPHS)MGLYPH_P[k]=new Path2D(MGLYPHS[k]);
+  const MARKER_TYPES=[{k:'home',n:'Maison'},{k:'work',n:'Travail'},{k:'friend',n:'Ami'},{k:'flag',n:'Repère'},{k:'star',n:'Favori'}];
+  const MARKER_LABEL={};MARKER_TYPES.forEach(t=>MARKER_LABEL[t.k]=t.n);
+  const MARKERS_KEY='pas1001_markers'+(DEV?'':'_prod2');
+  let markers=[];
+  function loadMarkers(){try{const a=JSON.parse(localStorage.getItem(MARKERS_KEY)||'[]');markers=Array.isArray(a)?a.filter(m=>m&&isFinite(m.lng)&&isFinite(m.lat)):[];}catch(_){markers=[];}}
+  function saveMarkers(){try{localStorage.setItem(MARKERS_KEY,JSON.stringify(markers));}catch(_){}}
+  loadMarkers();
+  function svgFor(path,col){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+path+'" fill="none" stroke="'+col+'" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';}
+  const wheelEl=()=>document.getElementById('markerWheel');
+  const wheelOpen=()=>{const w=wheelEl();return !!(w&&w.classList.contains('open'));};
+  let wheelLL=null, suppressClick=false;
+  function openWheel(clientX,clientY){
+    const w=wheelEl();if(!w)return;const mc=map.getContainer(),rect=mc.getBoundingClientRect();
+    const px=clientX-rect.left, py=clientY-rect.top;
+    try{wheelLL=map.unproject([px,py]);}catch(_){return;}
+    w.innerHTML='';w.style.left=px+'px';w.style.top=py+'px';
+    const center=document.createElement('button');center.className='mw-center';center.innerHTML=svgFor(MROUTE,'#f7ecd4');
+    center.onclick=e=>{e.stopPropagation();if(wheelLL&&world){const m=lngLatToM(wheelLL.lng,wheelLL.lat);setRoute(m.x,m.y,'Point choisi');}closeWheel();};
+    w.appendChild(center);
+    const R=68,n=MARKER_TYPES.length;
+    MARKER_TYPES.forEach((t,i)=>{const ang=-Math.PI/2+i*2*Math.PI/n;const b=document.createElement('button');
+      b.className='mw-petal';b.innerHTML=svgFor(MGLYPHS[t.k],MARKER_COLOR);
+      b.style.left=(Math.cos(ang)*R)+'px';b.style.top=(Math.sin(ang)*R)+'px';
+      b.onclick=e=>{e.stopPropagation();if(wheelLL)placeMarker(t.k,wheelLL.lng,wheelLL.lat);closeWheel();};
+      w.appendChild(b);});
+    w.classList.add('open');suppressClick=true;
+    setTimeout(()=>document.addEventListener('pointerdown',wheelOutside,{once:true}),0);
+  }
+  function wheelOutside(e){const w=wheelEl();if(w&&!w.contains(e.target))closeWheel();}
+  function closeWheel(){const w=wheelEl();if(w){w.classList.remove('open');w.innerHTML='';}wheelLL=null;}
+  function placeMarker(type,lng,lat){markers.push({id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4),lng:lng,lat:lat,type:type,ts:Date.now()});saveMarkers();toast('r','✦','Repère posé',MARKER_LABEL[type]||'Repère');}
+  // repère = MÊME STYLE que les sites (sceau de cire) mais en AZUR → reconnaissable comme repère perso
+  function drawMarkerSeal(x,y,glyph,ph){var g=fctx,r=10.5;g.save();
+    g.fillStyle='rgba(20,40,70,0.30)';g.beginPath();g.ellipse(x+0.5,y+r*1.1,r*0.66,r*0.22,0,0,TAU);g.fill();  // ombre au sol
+    g.fillStyle='#173250';g.beginPath();g.arc(x+0.9,y+1.1,r,0,TAU);g.fill();                                  // épaisseur
+    g.fillStyle=MARKER_COLOR;waxPath(g,x,y,r,ph||0);g.fill();                                                 // cire azur
+    var sh=g.createRadialGradient(x-r*0.35,y-r*0.45,r*0.1,x,y,r);                                             // modelé
+    sh.addColorStop(0,'rgba(235,246,255,0.5)');sh.addColorStop(0.45,'rgba(255,255,255,0)');sh.addColorStop(0.8,'rgba(0,12,34,0)');sh.addColorStop(1,'rgba(0,12,34,0.42)');
+    g.fillStyle=sh;g.beginPath();g.arc(x,y,r,0,TAU);g.fill();
+    g.strokeStyle='rgba(247,236,212,0.9)';g.lineWidth=0.9;g.beginPath();g.arc(x,y,r*0.72,0,TAU);g.stroke();   // filet crème
+    if(glyph)drawGlyph(g,glyph,x,y,r*1.23,'#f2f8ff',2);g.restore();}
+  function markerAtPoint(px,py){let best=null,bd=18*18;for(const mk of markers){let p;try{p=map.project([mk.lng,mk.lat]);}catch(_){continue;}
+    const d=(p.x-px)*(p.x-px)+(p.y-py)*(p.y-py);if(d<bd){bd=d;best=mk;}}return best;}
+  const markerPop=()=>document.getElementById('markerPop');
+  function closeMarkerPop(){const p=markerPop();if(p)p.classList.remove('show');}
+  function openMarkerPop(mk){const p=markerPop();if(!p)return;let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){return;}
+    const m=world?lngLatToM(mk.lng,mk.lat):null,pas=m?pasFrom(m.x,m.y):null;
+    p.innerHTML=(pas!=null?'<div class="mp-s">≈ '+pas.toLocaleString('fr-FR')+' pas d\'ici</div>':'')+
+      '<div class="mp-row"><button class="tg2" id="mpRoute">Itinéraire</button><button class="tg2 danger" id="mpDel">Supprimer</button></div>';
+    p.style.left=Math.max(8,Math.min(W-168,mp.x-78))+'px';p.style.top=Math.max(8,mp.y-96)+'px';p.classList.add('show');
+    document.getElementById('mpRoute').onclick=()=>{const mm=lngLatToM(mk.lng,mk.lat);setRoute(mm.x,mm.y,MARKER_LABEL[mk.type]||'Repère');closeMarkerPop();};
+    document.getElementById('mpDel').onclick=()=>{markers=markers.filter(x=>x.id!==mk.id);saveMarkers();closeMarkerPop();};}
+  // clic long (souris/tactile) sans bouger = ouvrir la roue à cet endroit
+  (function(){const mc=map.getContainer();let t=null,sx=0,sy=0;
+    mc.addEventListener('pointerdown',e=>{if(e.button&&e.button!==0)return;suppressClick=false;if(wheelOpen())return;sx=e.clientX;sy=e.clientY; // reset defensif : evite qu'un suppressClick reste coince si le 'click' ne suit pas le clic long
+      clearTimeout(t);t=setTimeout(()=>{openWheel(sx,sy);},450);});
+    mc.addEventListener('pointermove',e=>{if(t&&Math.hypot(e.clientX-sx,e.clientY-sy)>10){clearTimeout(t);t=null;}});
+    mc.addEventListener('pointerup',()=>{clearTimeout(t);t=null;});
+    mc.addEventListener('pointercancel',()=>{clearTimeout(t);t=null;});
+  })();
   // ── zoom (le dézoom mène naturellement à la vue planète — plus de bouton dédié) ──
   document.getElementById('zin').onclick=()=>map.zoomIn();
   document.getElementById('zout').onclick=()=>map.zoomOut();
@@ -1016,23 +1117,31 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const pasFrom=(x,y)=>Math.round(Math.hypot(x-state.pl.x,y-state.pl.y)/0.75); // distance joueur→lieu, en pas
   function renderSearch(){const raw=topSearch.value.trim(),q=normStr(raw);searchResults.innerHTML='';
     if(!searchBarEl.classList.contains('open')){searchResults.classList.remove('show');return;}
+    if(raw){const pm=document.createElement('div');pm.className='sr-item sr-mark';       // poser un REPÈRE à cette adresse (géocodage Nominatim)
+      pm.innerHTML='<span class="sr-mk">◈</span><div class="sr-t"><b>Poser un repère ici</b><span class="sub">'+escHtml(raw)+'</span></div>';
+      pm.addEventListener('click',function(){markFromSearch(raw);});searchResults.appendChild(pm);}
     const m=discoveredPlaces().filter(function(x){return !q||normStr(x.name).indexOf(q)>=0;});
     m.sort(function(a,b){const A=q&&normStr(a.name).indexOf(q)===0?0:1,B=q&&normStr(b.name).indexOf(q)===0?0:1;
       return A-B||pasFrom(a.x,a.y)-pasFrom(b.x,b.y);});
     const top=m.slice(0,8);
-    if(!top.length){searchResults.innerHTML='<div class="sr-empty">Aucun site débloqué ne correspond. Explore la carte pour en débloquer !</div>';searchResults.classList.add('show');return;}
     top.forEach(function(it){const el=document.createElement('div');el.className='sr-item';
       el.innerHTML='<img alt="" src="'+sealDataURL(it.g,24,it.sub==='Zone')+'">'
         +'<div class="sr-t"><b>'+escHtml(it.name)+'</b><span class="sub">'+escHtml(it.sub)+'</span></div>'
         +'<span class="lead"></span><span class="pas">'+pasFrom(it.x,it.y).toLocaleString('fr-FR')+' pas</span>';
       el.addEventListener('click',function(){goToDiscovered(it);});searchResults.appendChild(el);});
-    const note=document.createElement('div');note.className='sr-note';note.textContent='Itinéraires vers les sites déjà débloqués.';
-    searchResults.appendChild(note);searchResults.classList.add('show');}
+    if(!raw&&!top.length){const e=document.createElement('div');e.className='sr-empty';e.textContent='Tape une adresse pour poser un repère, ou explore la carte pour débloquer des sites.';searchResults.appendChild(e);}
+    searchResults.classList.add('show');}
   function goToDiscovered(it){searchResults.classList.remove('show');topSearch.blur();
     searchBarEl.classList.remove('open');topSearch.value='';
     setRoute(it.x,it.y,it.name);
     follow=false;recenterBtn.classList.add('show');
     map.flyTo({center:[it.lng,it.lat],zoom:Math.max(map.getZoom(),16.5),duration:900});}
+  function markFromSearch(query){searchResults.classList.remove('show');topSearch.blur();searchBarEl.classList.remove('open');topSearch.value='';
+    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(query),{headers:{'Accept':'application/json'}})
+      .then(r=>r.json()).then(a=>{if(a&&a[0]){const lng=parseFloat(a[0].lon),lat=parseFloat(a[0].lat);placeMarker('flag',lng,lat);
+        follow=false;recenterBtn.classList.add('show');map.flyTo({center:[lng,lat],zoom:Math.max(map.getZoom(),16),duration:900});}
+        else toast('r','?','Adresse introuvable','Essaie une autre formulation');})
+      .catch(()=>toast('r','?','Recherche indisponible','(réseau)'));}
   topSearch.addEventListener('input',renderSearch);
   topSearch.addEventListener('focus',renderSearch);
   document.addEventListener('click',function(e){var t=e.target;
@@ -1373,6 +1482,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       for(let i=0;i<N;i++){const p=proj(trail[i].x,trail[i].y);
         if(p.x<-6||p.x>W+6||p.y<-6||p.y>H+6)continue;
         const a=i/N;fctx.fillStyle=`rgba(140,28,42,${0.12+0.55*a})`;fctx.beginPath();fctx.arc(p.x,p.y,1.9,0,TAU);fctx.fill();}}
+    // REPÈRES de l'utilisateur (couleur azur dédiée) — au-dessus des sites, sous le joueur
+    if(z>=12&&markers.length)for(const mk of markers){let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){continue;}
+      if(mp.x<-20||mp.x>W+20||mp.y<-20||mp.y>H+20)continue;
+      let ph=0,id=mk.id||'';for(let ci=0;ci<id.length;ci++)ph+=id.charCodeAt(ci);
+      drawMarkerSeal(mp.x,mp.y,MGLYPH_P[mk.type]||MGLYPH_P.flag,(ph%628)/100);}
     const PS=proj(state.pl.x,state.pl.y);
     // itinéraire : PERSONNAGE → cible, suit les VRAIES routes (poly OSRM), la portion déjà faite disparaît
     if(route){const rp=proj(route.x,route.y);
