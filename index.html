@@ -404,6 +404,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="row"><div class="rl"><span>Marche automatique</span><small>Explore tout seul</small></div><button class="tg2" id="autoBtn">Activer</button></div>
     <div class="row"><div class="rl"><span>Vitesse</span><small id="spdVal">×2.0</small></div><input type="range" id="spd" min="0.5" max="8" step="0.5" value="2"></div>
     <div class="row"><div class="rl"><span>Ma position (GPS)</span><small id="gpsStat">Recentre sur toi</small></div><button class="tg2" id="gpsBtn">Aller</button></div>
+    <div class="row"><div class="rl"><span>Pas « app fermée »</span><small id="pedSimNote">Simule des pas comptés hors-session (test)</small></div><button class="tg2" id="pedSimBtn">+500</button></div>
     <div class="row"><div class="rl"><span>Réinitialiser</span><small>La brume recouvre tout</small></div><button class="tg2 danger" id="resetBtn">Effacer</button></div>
     <div class="searchrow"><input type="text" id="searchInput" placeholder="Ville, adresse ou site…"><button class="tg2" id="searchBtn">OK</button></div>
     <p class="gpsnote">Touche la carte pour marcher jusqu'à un point. Choisis ta ville ci-dessus pour explorer TON quartier. Le GPS marche sur un vrai site/app (souvent bloqué en ouverture locale de fichier).</p>
@@ -961,6 +962,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const panel=document.getElementById('simPanel');
   document.getElementById('simBtn').onclick=()=>panel.classList.add('open');
   document.getElementById('closePanel').onclick=()=>panel.classList.remove('open');
+  (function(){var b=document.getElementById('pedSimBtn'),note=document.getElementById('pedSimNote'); // TEST : simule des pas « app fermée » (retour à l'écran, pas besoin de marcher)
+    if(b)b.onclick=function(){var r=window.__ped.simClosed(500);if(note)note.textContent='→ +'+r.simule+' pas crédités · total '+fmt(r.pas)+' pas, '+fmt(r.xp)+' XP';};})();
   const phoneBtn=document.getElementById('phoneBtn'); // cadre téléphone : redimensionne le conteneur puis la carte
   phoneBtn.onclick=()=>{const on=document.body.classList.toggle('phone');phoneBtn.classList.toggle('on',on);phoneBtn.textContent=on?'Actif':'Activer';
     resize();try{map.resize();}catch(_){}};
@@ -1441,6 +1444,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   }
   let pedStarted=false;
   window.__ped={native:NATIVE,plugin:false,avail:null,steps:0,total:null,err:''};   // diagnostic (temporaire)
+  // TEST (sans marcher / sans capteur) : simule N pas faits pendant que l'app était fermée → même chemin que le vrai capteur.
+  // Sert au bouton de la version test (?dev) et à la vérif sur PC (aperçu). Invisible/inoffensif en distribuable.
+  window.__ped.simClosed=function(n){ n=Math.max(0,Math.round(n||0));
+    var base=(pedLastTotal==null?1000:pedLastTotal); pedLastTotal=base; pedFirstCredit=true; // état « on rouvre l'app »
+    pedCredit(base+n);                                                                        // le capteur « revient » avec le cumul augmenté
+    return {simule:n, pas:Math.round(state.dist/0.75), xp:state.xp}; };
   function startPedometer(){
     if(pedStarted)return;pedStarted=true;
     try{
