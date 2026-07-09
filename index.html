@@ -706,7 +706,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       .then(r=>r.ok?r.json():Promise.reject()).then(d=>{const raw=nominatimToRaw(d);if(raw){ingestZoneRaw(raw);zoneCacheAdd(raw);const zz=world._zoneById.get(raw.id);if(zz)discoverZone(zz);}}) // reverse = la contrée où l'on EST → on la découvre DIRECT (fiable même au ras du bord, sans re-tester mon polygone approximé)
       .catch(()=>{}).then(finish);}
   // Dès qu'on n'est PAS dans une contrée déjà chargée → on va chercher sa vraie forme (throttle + anti-doublon)
-  function ensureZone(){if(!world||zonePending)return;if(zoneAt(state.pl.x,state.pl.y))return;
+  function ensureZone(){if(!world||zonePending)return;
+    if(!DEV&&geoFirst)return; // distribuable : AUCUNE découverte tant qu'on n'a pas un VRAI relevé GPS (sinon on révèle le centre par défaut = « contrée fantôme »)
+    if(zoneAt(state.pl.x,state.pl.y))return;
     const now=performance.now();if(now-lastZoneTry<1500)return;lastZoneTry=now;
     const ll=mToLngLat(state.pl.x,state.pl.y);reverseZone(ll[0],ll[1]);}
   // ---- Lieux + noms de quartiers INSTANTANÉS depuis les tuiles vectorielles déjà chargées (zéro attente réseau) ----
@@ -1544,6 +1546,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   map.on('load',()=>{
     map.on('styleimagemissing',ev=>{try{if(!map.hasImage(ev.id))map.addImage(ev.id,{width:1,height:1,data:new Uint8Array(4)});}catch(_){}});
     let saved=null;try{saved=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');}catch(e){}
+    // Anti-« contrée fantôme » : un save DISTRIBUABLE resté centré sur le centre PAR DÉFAUT (Annecy) n'a JAMAIS été refondé
+    // par un vrai relevé GPS → tout ce qu'il contient a été révélé au centre par défaut sans y être. On repart propre.
+    if(!DEV&&saved&&saved.C&&Math.abs(saved.C[0]-CONFIG.defaultCenter[0])<0.002&&Math.abs(saved.C[1]-CONFIG.defaultCenter[1])<0.002){
+      saved=null;try{localStorage.removeItem(SAVE_KEY);}catch(_){}}
     bootHadSave=!!saved;                  // nouveau joueur vs joueur existant → le 1er relevé GPS refonde ou conserve
     const C=(saved&&saved.C)?saved.C:CONFIG.defaultCenter;
     initWorld(C);
