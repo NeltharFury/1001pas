@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>1001 Pas — carte réelle</title>
-<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23EAD9B0'/><circle cx='16.4' cy='16.5' r='9' fill='%236e1522'/><circle cx='16' cy='16' r='9' fill='%23A4243B'/><circle cx='16' cy='16' r='6.2' fill='none' stroke='%23f7ecd4' stroke-width='1.2'/></svg>">
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23EAD9B0'/><circle cx='16' cy='16' r='11' fill='%23A4243B'/><circle cx='16' cy='16' r='11' fill='none' stroke='%23B98A2E' stroke-width='1.4'/><path d='M16 6 L18 14 L26 16 L18 18 L16 26 L14 18 L6 16 L14 14 Z' fill='%23f7ecd4'/></svg>">
 <meta name="theme-color" content="#2c1f12">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -61,6 +61,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #searchOpenBtn,#progBtn{width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
     background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 6px 16px rgba(40,24,6,.3);
     cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
+  /* ── retour tactile : les contrôles s'enfoncent au toucher (feel premium) — coupé par prefers-reduced-motion plus bas ── */
+  #searchOpenBtn,#progBtn,#recenterBtn,#simBtn,#identity,button.tg2,#poiRoute,#wcGo,#rbClear{transition:transform .13s cubic-bezier(.2,.8,.3,1),filter .13s ease;}
+  #searchOpenBtn:active,#progBtn:active,#recenterBtn:active,#simBtn:active,#identity:active,button.tg2:active,#poiRoute:active,#wcGo:active,#rbClear:active{transform:scale(.93);}
+  @media (hover:hover){#searchOpenBtn:hover,#progBtn:hover,#recenterBtn:hover,#simBtn:hover,#identity:hover{filter:brightness(1.04);}}
+  @media (prefers-reduced-motion: no-preference){
+    @keyframes hudIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+    #identity{animation:hudIn .5s .15s ease backwards;}
+  }
   #searchBar{top:12px;left:11px;right:11px;z-index:7;display:none;animation:riseIn .3s ease both;}
   #searchBar.open{display:block;}
   .sb-box{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:13px;background:linear-gradient(180deg,#f9f0d8,#f0e2bc);
@@ -86,6 +94,15 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   /* ── identité : image + pseudo + niveau + XP (toucher = fiche de personnage) ── */
   #identity{top:12px;left:13px;display:flex;gap:10px;align-items:center;padding:8px 14px 9px 9px;max-width:70vw;cursor:pointer;}
   .crest{width:42px;height:42px;flex:0 0 auto;border-radius:50%;}
+  .crestbox{position:relative;flex:0 0 auto;display:inline-flex;line-height:0;}
+  .crest-photo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:72%;height:72%;border-radius:50%;
+    background-size:cover;background-position:center;display:none;box-shadow:0 0 0 1px rgba(110,21,34,.55);}
+  .crest-photo.on{display:block;}
+  #csCrest{cursor:pointer;}
+  .crest-x{position:absolute;top:-5px;right:-5px;width:17px;height:17px;padding:0;border-radius:50%;
+    border:1px solid rgba(250,242,220,.7);background:#6e1522;color:#f7ecd4;font:11px/1 system-ui,sans-serif;
+    display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 3px rgba(40,24,6,.5);}
+  .crest-x.on{display:flex;}
   .ident-text{display:flex;flex-direction:column;gap:2px;min-width:132px;}
   #pTitle{font-family:var(--display);font-size:13px;font-weight:700;letter-spacing:.4px;color:#35240f;line-height:1.1;}
   #pSub{font-size:9.5px;letter-spacing:1.2px;color:var(--inkSoft);font-variant:small-caps;}
@@ -277,13 +294,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   </defs></svg>
 
   <div id="identity" class="hud card" role="button" aria-label="Fiche de personnage">
-    <svg class="crest" viewBox="0 0 38 38" aria-hidden="true">
+    <span class="crestbox"><svg class="crest" viewBox="0 0 38 38" aria-hidden="true">
       <circle cx="19.6" cy="19.8" r="14.6" fill="#6e1522"/>
       <circle cx="19" cy="19" r="14.4" fill="#A4243B"/>
       <circle cx="19" cy="19" r="14.4" fill="url(#waxShadeH)"/>
       <circle cx="19" cy="19" r="10.6" fill="none" stroke="#f7ecd4" stroke-width="0.9" stroke-opacity="0.85"/>
       <path d="M12 3.4 L14.3 9.7 L20.6 12 L14.3 14.3 L12 20.6 L9.7 14.3 L3.4 12 L9.7 9.7 Z" transform="translate(9.4,9.4) scale(0.8)" fill="none" stroke="#f9efd9" stroke-width="1.8" stroke-linejoin="round"/>
-    </svg>
+    </svg><i class="crest-photo" id="idPhoto"></i></span>
     <div class="ident-text">
       <div id="pTitle">Voyageur</div>
       <div id="pSub">niveau 1</div>
@@ -329,12 +346,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="pp-grab"></div>
     <button class="cs-close" id="csClose" aria-label="Fermer">✕</button>
     <div class="cs-head">
-      <svg class="crest" viewBox="0 0 38 38" aria-hidden="true">
+      <span class="crestbox" id="csCrest" title="Changer la photo de profil"><svg class="crest" viewBox="0 0 38 38" aria-hidden="true">
         <circle cx="19.6" cy="19.8" r="14.6" fill="#6e1522"/><circle cx="19" cy="19" r="14.4" fill="#A4243B"/>
         <circle cx="19" cy="19" r="14.4" fill="url(#waxShadeH)"/>
         <circle cx="19" cy="19" r="10.6" fill="none" stroke="#f7ecd4" stroke-width="0.9" stroke-opacity="0.85"/>
         <path d="M12 3.4 L14.3 9.7 L20.6 12 L14.3 14.3 L12 20.6 L9.7 14.3 L3.4 12 L9.7 9.7 Z" transform="translate(9.4,9.4) scale(0.8)" fill="none" stroke="#f9efd9" stroke-width="1.8" stroke-linejoin="round"/>
-      </svg>
+      </svg><i class="crest-photo" id="csPhoto"></i><button class="crest-x" id="csPhotoX" aria-label="Retirer la photo">✕</button></span>
       <div>
         <input id="csPseudo" maxlength="24" spellcheck="false" aria-label="Pseudo" value="Voyageur">
         <div class="cs-lvl" id="csLvl">niveau 1</div>
@@ -344,6 +361,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       <div class="xpbar"><i id="csXp"></i></div>
       <div class="cs-xpnum"><span id="csXpCur">0 / 0 XP</span><span id="csXpRem">reste 0</span></div>
     </div>
+    <input type="file" id="photoInput" accept="image/*" hidden>
     <div class="cs-sec">Parcours</div>
     <div class="sp-row"><span>Pas</span><i></i><b id="sSteps">0</b></div>
     <div class="sp-row"><span>Contrées explorées</span><i></i><b id="sReg">0</b></div>
@@ -797,7 +815,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       {id:'street-name',type:'symbol',source:'omt','source-layer':'transportation_name',minzoom:14.5,layout:{'text-field':['coalesce',['get','name'],''],'text-font':['Noto Sans Regular'],'text-size':11,'symbol-placement':'line'},paint:{'text-color':'#6b5836','text-halo-color':'#e8d9b5','text-halo-width':1.4}}
     ]};
   const map=new maplibregl.Map({container:'map',style:PARCHMENT_STYLE,
-    center:CONFIG.defaultCenter,zoom:CONFIG.defaultZoom,minZoom:1,maxZoom:18.5,attributionControl:{compact:true},dragRotate:false,pitchWithRotate:false});
+    center:CONFIG.defaultCenter,zoom:CONFIG.defaultZoom,minZoom:1,maxZoom:18.5,attributionControl:false,dragRotate:false,pitchWithRotate:false});
+  try{map.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-left');}catch(_){}  // en BAS À GAUCHE : ne passe plus derrière les boutons de droite
   map.touchZoomRotate.disableRotation();
   try{map.touchPitch.disable();}catch(_){}   // pas d'inclinaison : la carte reste à plat (sinon le calque de brume envahit tout l'écran)
   window.__pas={map:map, get state(){return state;}, get world(){return world;}, get route(){return route;}}; // poignée de test (aperçu/captures) — ne rien brancher dessus en jeu
@@ -857,6 +876,33 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // ── fiche de personnage (toucher le panneau d'identité) ──
   const charSheet=document.getElementById('charSheet');
   document.getElementById('identity').onclick=()=>{charSheet.classList.add('open');progPanel.classList.remove('open');};
+  // ── PHOTO DE PROFIL : stockée à part (data URL redimensionnée), affichée dans les 2 emblèmes HTML + le sceau du joueur sur la carte ──
+  const AVATAR_KEY='pas1001_avatar'+(DEV?'':'_prod');
+  let avatarImg=null;
+  function applyAvatarToCrests(url){['idPhoto','csPhoto'].forEach(function(id){const el=document.getElementById(id);if(!el)return;
+    if(url){el.style.backgroundImage='url("'+url+'")';el.classList.add('on');}else{el.style.backgroundImage='';el.classList.remove('on');}});
+    const x=document.getElementById('csPhotoX');if(x)x.classList.toggle('on',!!url);}
+  function setAvatar(url){avatarImg=null;if(url){const im=new Image();im.onload=function(){avatarImg=im;};im.src=url;}applyAvatarToCrests(url);}
+  function loadAvatar(){let url='';try{url=localStorage.getItem(AVATAR_KEY)||'';}catch(e){}if(url)setAvatar(url);}
+  function removeAvatar(){try{localStorage.removeItem(AVATAR_KEY);}catch(e){}setAvatar('');}
+  function processAvatarFile(file){
+    if(!file||!/^image\//.test(file.type||''))return;
+    const fr=new FileReader();
+    fr.onload=function(){const img=new Image();
+      img.onload=function(){const S=256,c=document.createElement('canvas');c.width=c.height=S;const g=c.getContext('2d');
+        const sc=Math.max(S/img.width,S/img.height),w=img.width*sc,h=img.height*sc;   // cover-fit centré
+        g.drawImage(img,(S-w)/2,(S-h)/2,w,h);
+        let url;try{url=c.toDataURL('image/jpeg',0.85);}catch(e){url=String(fr.result||'');}
+        try{localStorage.setItem(AVATAR_KEY,url);}catch(e){toast('r','⚠','Photo trop lourde','Réessaie avec une image plus petite');return;}
+        setAvatar(url);toast('r','✦','Photo de profil mise à jour','');};
+      img.onerror=function(){toast('r','⚠','Image illisible','Essaie un autre fichier');};
+      img.src=String(fr.result||'');};
+    fr.readAsDataURL(file);}
+  const photoInput=document.getElementById('photoInput');
+  document.getElementById('csCrest').onclick=function(){photoInput.click();};                          // toucher l'emblème = choisir/changer la photo
+  document.getElementById('csPhotoX').onclick=function(e){e.stopPropagation();removeAvatar();};          // ✕ = retirer la photo (sans rouvrir le sélecteur)
+  photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
+  loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
   const LEGEND=[{key:'view',label:'Point de vue'},{key:'peak',label:'Sommet'},{key:'castle',label:'Château'},
@@ -1126,6 +1172,17 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     g.strokeStyle='rgba(247,236,212,0.9)';g.lineWidth=0.9;g.beginPath();g.arc(x,y,r*0.72,0,TAU);g.stroke();  // filet crème
     if(glyph)drawGlyph(g,glyph,x,y,r*1.23,'#f9efd9',2);
     g.restore();}
+  // sceau du joueur : soit la PHOTO de profil (clippée dans l'anneau), soit le sceau étoilé par défaut
+  function drawPlayerEmblem(x,y,r){
+    if(!avatarImg){drawSeal(fctx,x,y,r,STAR_P,2.4,1);return;}
+    const g=fctx;g.save();
+    g.fillStyle='rgba(74,52,33,0.32)';g.beginPath();g.ellipse(x+0.5,y+r*1.1,r*0.66,r*0.22,0,0,TAU);g.fill();   // ombre au sol
+    g.fillStyle='#6e1522';g.beginPath();g.arc(x+0.9,y+1.1,r,0,TAU);g.fill();                                   // épaisseur
+    g.fillStyle='#6e1522';g.beginPath();g.arc(x,y,r,0,TAU);g.fill();                                            // fond carmin (photo transparente)
+    g.save();g.beginPath();g.arc(x,y,r-1.3,0,TAU);g.clip();const d=(r-1.3)*2;g.drawImage(avatarImg,x-(r-1.3),y-(r-1.3),d,d);g.restore(); // photo
+    g.strokeStyle='#B98A2E';g.lineWidth=1.3;g.beginPath();g.arc(x,y,r-0.6,0,TAU);g.stroke();                   // anneau d'or
+    g.strokeStyle='rgba(247,236,212,0.85)';g.lineWidth=0.7;g.beginPath();g.arc(x,y,r-2.3,0,TAU);g.stroke();    // filet crème
+    g.restore();}
   // lieu encore à découvrir : pastille GRIS ARDOISE (couleur distincte du parchemin → repérable au 1er coup d'œil)
   function drawLocked(x,y,glyph,av){fctx.save();fctx.globalAlpha=av==null?1:av;
     fctx.fillStyle='rgba(74,52,33,0.26)';fctx.beginPath();fctx.ellipse(x+0.5,y+11,7,2.2,0,0,TAU);fctx.fill(); // ombre au sol
@@ -1282,7 +1339,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
      fctx.save();fctx.translate(PS.x,PS.y);if(!noMotion)fctx.rotate((t%40000)/40000*TAU);
      fctx.strokeStyle='#B98A2E';fctx.lineWidth=0.9;fctx.setLineDash([2.2,3.6]);fctx.beginPath();fctx.arc(0,0,17,0,TAU);fctx.stroke();fctx.setLineDash([]);fctx.restore();
      // sceau carmin du joueur (plus tard : sa photo de profil dans l'anneau). Aucun texte dessous.
-     drawSeal(fctx,PS.x,PS.y,12.4,STAR_P,2.4,1);}
+     drawPlayerEmblem(PS.x,PS.y,12.4);}
     // infobulle « marche jusqu'à ce lieu »
     if(tip){if(now>tip.until)tip=null;else{const tp=proj(tip.x,tip.y),msg='Marche jusqu\'à ce site pour le découvrir';
       fctx.font='italic 11px '+FONT_SERIF;const tw2=fctx.measureText(msg).width;

@@ -1,8 +1,8 @@
 /* 1001 Pas — service worker : cache l'app + MAJ automatique.
    HTML = réseau d'abord (→ la nouvelle version arrive dès qu'on republie), repli cache hors-ligne.
    Reste (lib carte, icône, manifeste) = cache d'abord. Les tuiles/OSM externes ne sont PAS gérées ici. */
-const CACHE = 'pas1001-shell-v2';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg',
+const CACHE = 'pas1001-shell-v3';   // v3 : nouvel icône (sceau + rose des vents) → force le rafraîchissement du cache d'icônes
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-512.png',
                './vendor/maplibre-gl.js', './vendor/maplibre-gl.css'];
 
 self.addEventListener('install', e => {
