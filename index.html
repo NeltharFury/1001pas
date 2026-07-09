@@ -349,8 +349,6 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="sp-row"><span>Contrées explorées</span><i></i><b id="sReg">0</b></div>
     <div class="sp-row"><span>Sites découverts</span><i></i><b id="sPoi">0 / 0</b></div>
     <div class="sp-row"><span>Contrées complétées</span><i></i><b id="sWorld">0</b></div>
-    <div class="cs-sec">Diagnostic (temporaire)</div>
-    <div id="csStatus" class="cs-note">—</div>
   </div>
 
   <div id="progPanel" class="hud scroll">
@@ -1044,7 +1042,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const $=id=>document.getElementById(id);
   const el={pseudo:$('pTitle'),sub:$('pSub'),xp:$('xpFill'),hint:$('xpHint'),zoom:$('zoomVal'),
     csLvl:$('csLvl'),csXp:$('csXp'),csXpCur:$('csXpCur'),csXpRem:$('csXpRem'),
-    steps:$('sSteps'),reg:$('sReg'),poi:$('sPoi'),world:$('sWorld'),status:$('csStatus')};
+    steps:$('sSteps'),reg:$('sReg'),poi:$('sPoi'),world:$('sWorld')};
   const fmt=n=>Math.round(n).toLocaleString('fr-FR');
   function updateHUD(){const li=levelInfo(state.xp),L=li.level;
     const need=totalXpForLevel(L+1)-totalXpForLevel(L),cur=state.xp-totalXpForLevel(L),rem=Math.max(0,need-cur);
@@ -1055,7 +1053,6 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     el.csXpCur.textContent=fmt(cur)+' / '+fmt(need)+' XP';el.csXpRem.textContent='reste '+fmt(rem);
     el.reg.textContent=fmt(state.discR.size);el.poi.textContent=state.discP.size+' / '+world.knownPOIs;
     el.world.textContent=fmt(state.compR.size);
-    if(el.status){var P=window.__ped||{};el.status.textContent=(NATIVE?'Natif':'Web')+' · plugin:'+(P.plugin?'oui':'non')+' · capteur:'+(P.avail===true?'oui':P.avail===false?'non':'?')+' · pas reçus:'+(P.steps||0)+(P.err?(' · err:'+P.err):'')+(lastAcc!=null?(' · GPS ±'+Math.round(lastAcc)+'m'):'');}
     el.steps.textContent=fmt(state.dist/0.75);
     el.zoom.textContent=map.getZoom().toFixed(1);
     if(route)rbPas.textContent='≈ '+fmt(routePas())+' PAS';
