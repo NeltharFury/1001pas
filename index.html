@@ -48,8 +48,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='420' height='420'><filter id='m' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='4'/><feColorMatrix type='matrix' values='0 0 0 0 0.44  0 0 0 0 0.32  0 0 0 0 0.15  0 0 0 0.13 0'/></filter><rect width='420' height='420' filter='url(%23m)'/></svg>"),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='2'/><feColorMatrix type='matrix' values='0 0 0 0 0.3  0 0 0 0 0.22  0 0 0 0 0.1  0 0 0 0.06 0'/></filter><rect width='240' height='240' filter='url(%23g)'/></svg>");}
   .maplibregl-ctrl-bottom-left{z-index:6;}   /* le « i » d'attribution PASSE PAR-DESSUS la brume (#fog z2 / #grain z3) — sinon il disparaît sous le voile */
-  /* « i » d'attribution (élément <details>/<summary>) au STYLE de l'interface (parchemin) + plus de liseré bleu de focus */
+  /* « i » d'attribution (élément <details>/<summary>) au STYLE de l'interface (parchemin), OUVERT COMME FERMÉ, + plus de liseré bleu */
   .maplibregl-ctrl-attrib{font-size:9px;background:rgba(247,237,210,.92)!important;border:1px solid rgba(74,52,33,.38);border-radius:11px;box-shadow:0 3px 10px rgba(40,24,6,.22);}
+  .maplibregl-ctrl-attrib-button{background-color:rgba(247,237,210,.95)!important;border-radius:11px;}   /* le « i » REPLIÉ = pastille parchemin (plus blanche) */
   .maplibregl-ctrl-attrib-button,.maplibregl-ctrl-attrib summary{outline:none!important;}
   .maplibregl-ctrl-attrib-button:focus,.maplibregl-ctrl-attrib-button:focus-visible,.maplibregl-ctrl-attrib summary:focus,.maplibregl-ctrl-attrib summary:focus-visible{outline:none!important;box-shadow:none!important;}
   .maplibregl-ctrl-attrib a{color:#6b5233;}
@@ -1329,11 +1330,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       fctx.strokeStyle='rgba(185,138,46,'+(0.95*av)+')';fctx.lineWidth=1.1;fctx.stroke();}
     // RELIEF de la zone courante quand la progression est ouverte : on voit TOUTE son étendue (même fragmentée en plusieurs morceaux)
     if(z>=12&&progPanel.classList.contains('open')){var hz=zoneAt(state.pl.x,state.pl.y);
-      if(hz&&hz.discovered){var pulse=0.5+0.5*Math.sin(now/380);
+      if(hz&&hz.discovered){var pulse=0.5+0.5*Math.sin(now/360);
         fctx.beginPath();zonePath(hz);fctx.lineJoin='round';fctx.lineCap='round';
-        fctx.fillStyle='rgba(185,138,46,'+(0.10+0.07*pulse)+')';fctx.fill();          // remplissage or translucide qui « respire »
-        fctx.strokeStyle='rgba(164,36,59,'+(0.75+0.2*pulse)+')';fctx.lineWidth=3.6;fctx.stroke(); // liseré carmin épais (accent de l'appli)
-        fctx.strokeStyle='rgba(243,231,198,0.9)';fctx.lineWidth=1.2;fctx.stroke();}}   // filet crème par-dessus
+        fctx.fillStyle='rgba(185,138,46,'+(0.17+0.11*pulse)+')';fctx.fill();               // remplissage or bien marqué qui « respire »
+        fctx.strokeStyle='rgba(164,36,59,'+(0.30+0.28*pulse)+')';fctx.lineWidth=9;fctx.stroke();  // large halo carmin doux (respire)
+        fctx.strokeStyle='rgba(164,36,59,0.95)';fctx.lineWidth=3.6;fctx.stroke();           // liseré carmin net
+        fctx.strokeStyle='rgba(243,231,198,0.95)';fctx.lineWidth=1.3;fctx.stroke();}}        // filet crème par-dessus
     fctx.textAlign='center';fctx.textBaseline='middle';
     // 1) cartouches des contrées (un seul par nom) — dessinés d'abord : les noms de sites leur céderont la place
     labelBoxes.length=0;
@@ -1352,7 +1354,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
           else if(Z.tDisc)sc=stampScale(clamp((now-Z.tDisc-600-i*130)/550,0,1));        // contrée fraîche : sceaux frappés un à un
           if(sc>0.001){fctx.save();if(sc!==1){fctx.translate(pp.x,pp.y);fctx.scale(sc,sc);fctx.translate(-pp.x,-pp.y);}
             drawSeal(fctx,pp.x,pp.y,12,GLYPH_P[P.g]||GLYPH_P.curio,poiPhase(P.id),av);fctx.restore();}
-        }else drawLocked(pp.x,pp.y,GLYPH_P[P.g]||GLYPH_P.curio,av);
+        }else{ var sph=(now%2400)/2400;                                    // SONAR : anneau carmin qui s'étend et s'efface (attire l'œil vers les sites à découvrir)
+          fctx.beginPath();fctx.arc(pp.x,pp.y,6+sph*16,0,TAU);
+          fctx.strokeStyle='rgba(164,36,59,'+((1-sph)*0.55*av)+')';fctx.lineWidth=1.8;fctx.stroke();
+          drawLocked(pp.x,pp.y,GLYPH_P[P.g]||GLYPH_P.curio,av); }
         if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?17:14,disc:disc,prox:prox,av:av,g:P.g});}}
     // 3) placement glouton : débloqués d'abord, puis sites marquants, puis de haut en bas ; on saute tout nom qui en chevauche un déjà posé (le sceau reste)
     nameCands.sort((a,b)=>(b.disc-a.disc)||((NAME_PRIO[b.g]||0)-(NAME_PRIO[a.g]||0))||(a.y-b.y));
