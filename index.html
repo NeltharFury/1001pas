@@ -59,7 +59,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   .scroll::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#b98a2e,#8a6a3a);border-radius:8px;border:2px solid transparent;background-clip:padding-box;}
 
   /* ── recherche : loupe (en bas, à portée du pouce) → barre déployée en haut (autocomplétion sur le DÉBLOQUÉ) ── */
-  #searchOpenBtn,#progBtn{width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
+  #searchOpenBtn,#progBtn,#simBtn{width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
     background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 6px 16px rgba(40,24,6,.3);
     cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
   /* ── retour tactile : les contrôles s'enfoncent au toucher (feel premium) — coupé par prefers-reduced-motion plus bas ── */
@@ -122,7 +122,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   /* ── joystick (outil de test) ── */
   #joystick{bottom:20px;left:16px;width:84px;height:84px;border-radius:50%;
             background:radial-gradient(circle,rgba(243,231,198,.45),rgba(243,231,198,.12));
-            border:1px solid rgba(74,52,33,.35);touch-action:none;display:grid;place-items:center;opacity:.9;}
+            border:1px solid rgba(74,52,33,.35);touch-action:none;display:none;place-items:center;opacity:.9;}   /* joystick RETIRÉ (jamais utilisé) — déplacement en test = clic sur la carte + marche auto */
   #joyKnob{width:34px;height:34px;border-radius:50%;pointer-events:none;
            background:radial-gradient(circle at 40% 35%,#c8536a,#8c1f30);
            border:1px solid rgba(250,242,220,.6);box-shadow:0 3px 10px rgba(40,24,6,.5);transition:transform .05s linear;}
@@ -139,8 +139,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #compass{right:13px;top:12px;pointer-events:none;opacity:.85;}
   #compass svg{width:70px;height:70px;display:block;}   /* aussi haute que la fenêtre de profil (haut-gauche) */
 
-  #simBtn{top:96px;right:14px;width:42px;height:42px;border-radius:50%;padding:0;font-size:17px;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;}
+  #simBtn{left:16px;bottom:20px;font-size:21px;cursor:pointer;z-index:6;}   /* test : même taille que les autres boutons, en bas à gauche, par-dessus tout */
   #simPanel{left:12px;right:12px;bottom:12px;max-width:440px;margin:0 auto;padding:15px 16px 17px;z-index:12;
             transform:translateY(160%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:78vh;overflow:auto;}
   #simPanel.open{transform:translateY(0);}
@@ -209,13 +208,16 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         padding:7px 18px;border-radius:11px;background:rgba(62,43,22,.88);box-shadow:0 8px 22px rgba(30,18,4,.4);
         font-style:italic;font-size:12.5px;color:#f2e5c4;white-space:nowrap;transition:opacity .6s;animation:floatY 5s ease-in-out infinite;}
   #hint.gone{opacity:0;}
-  #loadChip{top:122px;left:50%;transform:translateX(-50%);padding:5px 13px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+  #loadChip{top:122px;left:50%;transform:translateX(-50%);padding:5px 13px 5px 10px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;display:inline-flex;align-items:center;gap:7px;}
   #loadChip.show{opacity:1;}
+  .ldspin{flex:none;transform-origin:center;animation:ldspin .9s linear infinite;}
+  @keyframes ldspin{to{transform:rotate(360deg);}}
   #recenterBtn{width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
     background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 6px 16px rgba(40,24,6,.3);
-    align-items:center;justify-content:center;padding:0;cursor:pointer;display:none;}   /* dans #ctrlStack, apparaît quand la carte est déplacée */
-  #recenterBtn.show{display:flex;}
-  body.prod #zoomStack{display:none;}             /* distribuable : pas de +/- (pinch-zoom au doigt, intuitif) */
+    display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;
+    opacity:.35;pointer-events:none;transition:opacity .2s ease,transform .13s cubic-bezier(.2,.8,.3,1);}   /* toujours visible : GRISÉ quand on est recentré */
+  #recenterBtn.show{opacity:1;pointer-events:auto;}                          /* actif quand la carte a été déplacée */
+  #zoomStack{display:none;}                        /* +/- retirés (test = molette souris ; distribuable = pinch) */
 
   /* ── barre d'itinéraire ── */
   #routeBar{bottom:0;left:0;right:0;transform:none;display:none;align-items:center;gap:12px;box-sizing:border-box;
@@ -413,7 +415,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   </div>
 
   <div id="hint" class="hud"></div>
-  <div id="loadChip" class="hud card">⏳ Chargement des sites…</div>
+  <div id="loadChip" class="hud card"><svg class="ldspin" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="rgba(138,106,58,.28)" stroke-width="3"/><path d="M12 3 a9 9 0 0 1 9 9" fill="none" stroke="#b98a2e" stroke-width="3" stroke-linecap="round"/></svg><span>Chargement des sites…</span></div>
 
   <div id="poiPanel" class="hud">
     <div class="pp-grab"></div>
@@ -456,7 +458,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   const CONFIG={
     defaultCenter:[6.1265,45.8990], defaultZoom:15,   // Annecy (vieille ville) par défaut
-    speed:{base:6,def:2}, arriveEps:4,
+    speed:{base:6,def:2}, arriveEps:1,   // arrêt = à 1 m du clic (le CENTRE de l'emblème atteint le clic, même en zoom fort ; > pas/frame donc pas d'oscillation)
     grid:{spacing:750, jitter:230},                    // taille des contrées (MONDE ILLIMITÉ, à la volée)
     osm:{radius:1600, refetch:1000},                   // rayon requête OSM (m) + distance parcourue avant recharge
     poi:{ nameRadius:90, reachRadius:32 },
@@ -898,7 +900,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   document.getElementById('zout').onclick=()=>map.zoomOut();
   // ── fiche de personnage (toucher le panneau d'identité) ──
   const charSheet=document.getElementById('charSheet');
-  document.getElementById('identity').onclick=()=>{charSheet.classList.add('open');progPanel.classList.remove('open');};
+  document.getElementById('identity').onclick=()=>{if(charSheet.classList.contains('open')){charSheet.classList.remove('open');return;} charSheet.classList.add('open');progPanel.classList.remove('open');};
   // ── PHOTO DE PROFIL : stockée à part (data URL redimensionnée), affichée dans les 2 emblèmes HTML + le sceau du joueur sur la carte ──
   const AVATAR_KEY='pas1001_avatar'+(DEV?'':'_prod');
   let avatarImg=null;
@@ -948,13 +950,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       h+='<div class="pg-t"><img alt="" src="'+sealDataURL(t.key,24,false)+'"><span class="pt-name">'+escHtml(t.label)+'</span><i></i><b>'+g+' / '+inT.length+'</b></div>';}
     if(!h)h='<div class="cs-note" style="margin:4px 0 0">Aucun site répertorié dans cette zone pour l\'instant.</div>';
     tEl.innerHTML=h;}
-  document.getElementById('progBtn').onclick=function(){renderProgress();progPanel.classList.add('open');charSheet.classList.remove('open');var sp=document.getElementById('simPanel');if(sp)sp.classList.remove('open');};
+  document.getElementById('progBtn').onclick=function(){if(progPanel.classList.contains('open')){progPanel.classList.remove('open');return;} renderProgress();progPanel.classList.add('open');charSheet.classList.remove('open');var sp=document.getElementById('simPanel');if(sp)sp.classList.remove('open');};
   document.getElementById('progClose').onclick=function(){progPanel.classList.remove('open');};
   const csPseudo=document.getElementById('csPseudo');
   csPseudo.addEventListener('input',()=>{state.pseudo=csPseudo.value.slice(0,24)||'Voyageur';dirty=true;document.getElementById('pTitle').textContent=state.pseudo;});
   // ── loupe → barre de recherche ──
   const searchBarEl=document.getElementById('searchBar'),searchOpenBtn=document.getElementById('searchOpenBtn');
-  searchOpenBtn.onclick=()=>{searchBarEl.classList.add('open');charSheet.classList.remove('open');
+  searchOpenBtn.onclick=()=>{if(searchBarEl.classList.contains('open')){searchBarEl.classList.remove('open');topSearch.blur();return;}
+    searchBarEl.classList.add('open');charSheet.classList.remove('open');
     setTimeout(()=>{topSearch.focus();},60);renderSearch();};
   document.getElementById('searchClose').onclick=()=>{searchBarEl.classList.remove('open');
     topSearch.value='';searchResults.classList.remove('show');topSearch.blur();};
@@ -965,7 +968,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   joy.addEventListener('pointerup',endJoy);joy.addEventListener('pointercancel',endJoy);
   function moveJoy(e){let dx=e.clientX-joyC.x,dy=e.clientY-joyC.y;const d=Math.hypot(dx,dy);if(d>JR){dx*=JR/d;dy*=JR/d;}knob.style.transform=`translate(${dx}px,${dy}px)`;control.joy.x=dx/JR;control.joy.y=dy/JR;}
   const panel=document.getElementById('simPanel');
-  document.getElementById('simBtn').onclick=()=>panel.classList.add('open');
+  document.getElementById('simBtn').onclick=()=>panel.classList.toggle('open');
   document.getElementById('closePanel').onclick=()=>panel.classList.remove('open');
   (function(){var b=document.getElementById('pedSimBtn'),note=document.getElementById('pedSimNote'); // TEST : simule des pas « app fermée » (retour à l'écran, pas besoin de marcher)
     if(b)b.onclick=function(){var r=window.__ped.simClosed(500);if(note)note.textContent='→ +'+r.simule+' pas crédités · total '+fmt(r.pas)+' pas, '+fmt(r.xp)+' XP';};})();
