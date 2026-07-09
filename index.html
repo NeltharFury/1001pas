@@ -1230,8 +1230,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function ornament(x,y,dir,av){fctx.strokeStyle='rgba(138,106,58,'+(0.9*av)+')';fctx.lineWidth=1;
     fctx.beginPath();fctx.moveTo(x,y);fctx.lineTo(x+10*dir,y);fctx.stroke();
     const dx=x+14*dir;fctx.beginPath();fctx.moveTo(dx,y-3.6);fctx.lineTo(dx+3.6*dir,y);fctx.lineTo(dx,y+3.6);fctx.lineTo(dx-3.6*dir,y);fctx.closePath();fctx.stroke();}
+  // Registre d'étiquettes du frame courant (anti-chevauchement) : chaque nom posé réserve sa boîte à l'écran.
+  const labelBoxes=[];
+  function boxHit(a){for(const b of labelBoxes){if(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y)return true;}return false;}
   function cartouche(cx,cy,label,av){fctx.font='700 11px '+FONT_DISPLAY;fctx.letterSpacing='2px';
     const tw=fctx.measureText(label).width,w=tw+26,h=22;
+    labelBoxes.push({x:cx-w/2,y:cy-h/2,w:w,h:h});   // les noms de sites éviteront le nom de la contrée
     fctx.fillStyle='rgba(243,231,198,'+(0.9*av)+')';rrect(fctx,cx-w/2,cy-h/2,w,h,h/2);fctx.fill();
     fctx.strokeStyle='rgba(74,52,33,'+(0.5*av)+')';fctx.lineWidth=0.6;rrect(fctx,cx-w/2,cy-h/2,w,h,h/2);fctx.stroke();
     ornament(cx-w/2-6,cy,-1,av);ornament(cx+w/2+6,cy,1,av);
@@ -1307,12 +1311,16 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       fctx.strokeStyle='rgba(74,52,33,'+(0.5*av)+')';fctx.lineWidth=2.4;fctx.stroke();
       fctx.strokeStyle='rgba(185,138,46,'+(0.95*av)+')';fctx.lineWidth=1.1;fctx.stroke();}
     fctx.textAlign='center';fctx.textBaseline='middle';
-    // cartouches des contrées découvertes + sceaux des lieux (un seul cartouche par nom → pas de doublon visible)
+    // 1) cartouches des contrées (un seul par nom) — dessinés d'abord : les noms de sites leur céderont la place
+    labelBoxes.length=0;
     const shownNames=new Set();
     for(const Z of dz){const av=1-Z.rev;const c=proj(Z.cx,Z.cy);
       if(z>=12&&c.x>-160&&c.x<W+160&&c.y>-40&&c.y<H+40&&!shownNames.has(Z.name)){shownNames.add(Z.name);
-        cartouche(c.x,c.y,Z.name.toUpperCase()+(state.compR.has(Z.id)?' ★':''),av);} // masqués au fort dézoom (illisibles)
-      if(z>=13.3)for(let i=0;i<Z.pois.length;i++){const P=Z.pois[i],pp=proj(P.x,P.y);if(pp.x<-30||pp.x>W+30||pp.y<-30||pp.y>H+30)continue;
+        cartouche(c.x,c.y,Z.name.toUpperCase()+(state.compR.has(Z.id)?' ★':''),av);}} // masqués au fort dézoom (illisibles)
+    // 2) sceaux/verrous des sites (TOUJOURS dessinés) + collecte des étiquettes candidates
+    const nameCands=[];
+    if(z>=13.3)for(const Z of dz){const av=1-Z.rev;
+      for(let i=0;i<Z.pois.length;i++){const P=Z.pois[i],pp=proj(P.x,P.y);if(pp.x<-30||pp.x>W+30||pp.y<-30||pp.y>H+30)continue;
         const disc=state.discP.has(P.id);
         const dist=Math.hypot(state.pl.x-P.x,state.pl.y-P.y),prox=clamp((CONFIG.poi.nameRadius-dist)/CONFIG.poi.nameRadius,0,1);
         if(disc){let sc=1;
@@ -1321,10 +1329,15 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
           if(sc>0.001){fctx.save();if(sc!==1){fctx.translate(pp.x,pp.y);fctx.scale(sc,sc);fctx.translate(-pp.x,-pp.y);}
             drawSeal(fctx,pp.x,pp.y,12,GLYPH_P[P.g]||GLYPH_P.curio,poiPhase(P.id),av);fctx.restore();}
         }else drawLocked(pp.x,pp.y,GLYPH_P[P.g]||GLYPH_P.curio,av);
-        if(disc||prox>0.03){const nm=P.n;fctx.font='600 10.5px '+FONT_SERIF;const nw=fctx.measureText(nm).width,oy=disc?17:14;
-          fctx.fillStyle=`rgba(243,231,198,${(disc?0.92:0.4+prox*0.55)*av})`;rrect(fctx,pp.x-nw/2-6,pp.y+oy,nw+12,15,7);fctx.fill();
-          fctx.strokeStyle=`rgba(74,52,33,${0.45*av})`;fctx.lineWidth=0.5;rrect(fctx,pp.x-nw/2-6,pp.y+oy,nw+12,15,7);fctx.stroke();
-          fctx.fillStyle=`rgba(53,36,15,${(disc?0.95:0.5+prox*0.5)*av})`;fctx.fillText(nm,pp.x,pp.y+oy+7.8);}}}
+        if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?17:14,disc:disc,prox:prox,av:av});}}
+    // 3) placement glouton : débloqués d'abord puis de haut en bas ; on saute tout nom qui en chevauche un déjà posé (le sceau reste)
+    nameCands.sort((a,b)=>(b.disc-a.disc)||(a.y-b.y));
+    fctx.font='600 10.5px '+FONT_SERIF;
+    for(const c of nameCands){const nw=fctx.measureText(c.nm).width,bx={x:c.x-nw/2-6,y:c.y+c.oy,w:nw+12,h:15};
+      if(boxHit(bx))continue; labelBoxes.push(bx);
+      fctx.fillStyle=`rgba(243,231,198,${(c.disc?0.92:0.4+c.prox*0.55)*c.av})`;rrect(fctx,bx.x,bx.y,bx.w,bx.h,7);fctx.fill();
+      fctx.strokeStyle=`rgba(74,52,33,${0.45*c.av})`;fctx.lineWidth=0.5;rrect(fctx,bx.x,bx.y,bx.w,bx.h,7);fctx.stroke();
+      fctx.fillStyle=`rgba(53,36,15,${(c.disc?0.95:0.5+c.prox*0.5)*c.av})`;fctx.fillText(c.nm,c.x,c.y+c.oy+7.8);}
     // traînée = petits points ANCRÉS à la carte, STABLES (ils ne bougent pas quand on marche), fondu par âge
     if(trail.length>1&&z>=13){const N=trail.length;
       for(let i=0;i<N;i++){const p=proj(trail[i].x,trail[i].y);
