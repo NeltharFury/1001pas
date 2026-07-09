@@ -110,6 +110,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     box-shadow:inset 0 1px 1px rgba(74,52,33,.18);}
   .xpbar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;width:0;
     background:linear-gradient(90deg,#8a5e14,#cfa84a 55%,#e7c877);transition:width .35s ease;}
+  .xpbar i::after{content:'';position:absolute;inset:0;border-radius:3px;pointer-events:none;   /* reflet d'or qui balaie la barre */
+    background:linear-gradient(105deg,transparent 38%,rgba(255,249,229,.72) 50%,transparent 62%);
+    background-size:250% 100%;animation:xpSheen 3.6s ease-in-out infinite;}
+  @keyframes xpSheen{0%{background-position:150% 0}60%,100%{background-position:-50% 0}}
+  @keyframes levelPop{0%,100%{filter:drop-shadow(0 0 0 rgba(185,138,46,0));transform:none}18%{filter:drop-shadow(0 0 11px rgba(199,168,74,.95));transform:scale(1.045)}}
+  #identity.levelup{animation:levelPop .9s cubic-bezier(.2,.8,.3,1);}   /* flash d'or à la montée de niveau */
   #xpHint{font-size:9px;color:#7c5a17;font-variant-numeric:tabular-nums;letter-spacing:.2px;}
 
   /* ── joystick (outil de test) ── */
@@ -267,6 +273,17 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #welcome .wc button{margin-top:14px;padding:11px 26px;border-radius:21px;border:1px solid rgba(58,10,18,.7);
     background:linear-gradient(180deg,#b23548,#8c1f30);box-shadow:inset 0 1px 0 rgba(255,220,210,.35),0 5px 14px rgba(90,12,24,.4);
     cursor:pointer;font-family:var(--display);font-size:11.5px;font-weight:700;letter-spacing:1.5px;color:#f9ecd7;}
+  /* entrée « atlas » de l'accueil : le sceau se frappe comme un cachet de cire, le texte se révèle en cascade */
+  @media (prefers-reduced-motion: no-preference){
+    @keyframes wcStamp{0%{opacity:0;transform:scale(1.55) rotate(-9deg)}60%{opacity:1;transform:scale(.93) rotate(2deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+    @keyframes wcRise{from{opacity:0;transform:translateY(11px)}to{opacity:1;transform:none}}
+    #welcome:not(.hidden) .wc>svg{animation:wcStamp .72s cubic-bezier(.2,.9,.3,1.15) .05s both;transform-origin:center 60%;}
+    #welcome:not(.hidden) .wc h1{animation:wcRise .5s ease .30s both;}
+    #welcome:not(.hidden) .wc .sub{animation:wcRise .5s ease .38s both;}
+    #welcome:not(.hidden) .wc p{animation:wcRise .5s ease .48s both;}
+    #welcome:not(.hidden) .wc .tip{animation:wcRise .5s ease .58s both;}
+    #welcome:not(.hidden) .wc button{animation:wcRise .5s ease .68s backwards;}
+  }
   @media (max-width:380px){ .ident-text{min-width:112px;} #identity{max-width:58vw;} }
   @media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important;} }
 </style>
@@ -1102,7 +1119,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     el.steps.textContent=fmt(state.dist/0.75);
     el.zoom.textContent=map.getZoom().toFixed(1);
     if(route)rbPas.textContent='≈ '+fmt(routePas())+' PAS';
-    if(L>prevLevel){toast('r','◆','Niveau '+L,'Bravo, continue !');prevLevel=L;}}
+    if(L>prevLevel){toast('r','◆','Niveau '+L,'Bravo, continue !');prevLevel=L;
+      var idc=document.getElementById('identity');if(idc){idc.classList.remove('levelup');void idc.offsetWidth;idc.classList.add('levelup');}}}
 
   function wanderTarget(){const a=Math.random()*TAU,d=200+Math.random()*400;return{x:state.pl.x+Math.cos(a)*d,y:state.pl.y+Math.sin(a)*d};}
   // recharge OSM autour du joueur au fil de l'exploration (enrichit noms + lieux partout)
