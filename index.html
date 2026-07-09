@@ -176,6 +176,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   .sp-row i{flex:1;border-bottom:1px dotted rgba(74,52,33,.4);transform:translateY(-3px);}
   .sp-row b{font-family:var(--display);font-size:13px;font-weight:600;color:#35240f;font-variant-numeric:tabular-nums;}
   .cs-note{font-size:10.5px;font-style:italic;color:var(--inkSoft);margin-top:12px;line-height:1.4;}
+  .cs-ver{text-align:center;font-size:9.5px;letter-spacing:.4px;color:rgba(74,52,33,.5);margin:16px 0 2px;}
   /* ── panneau de complétion (façon Guild Wars 2) — bouton dans #ctrlStack (bas-droite, à portée du pouce) ── */
   #progPanel{left:0;right:0;bottom:0;max-width:520px;margin:0 auto;z-index:12;position:absolute;
     border-radius:20px 20px 0 0;background:linear-gradient(180deg,#f8efd6,#efe0ba);border:1px solid rgba(74,52,33,.55);border-bottom:none;
@@ -413,6 +414,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="sp-row"><span>Zones explorées</span><i></i><b id="sReg">0</b></div>
     <div class="sp-row"><span>Sites découverts</span><i></i><b id="sPoi">0 / 0</b></div>
     <div class="sp-row"><span>Zones complétées</span><i></i><b id="sWorld">0</b></div>
+    <div class="cs-ver" id="csVer"></div>
   </div>
 
   <div id="progPanel" class="hud scroll">
@@ -1035,6 +1037,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
+  const APP_BUILD=26;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
+  (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
   const LEGEND=[{key:'view',label:'Point de vue'},{key:'peak',label:'Sommet'},{key:'castle',label:'Château'},
     {key:'ruins',label:'Ruines'},{key:'monument',label:'Monument'},{key:'museum',label:'Musée'},
