@@ -1082,8 +1082,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     g.strokeStyle='rgba(251,243,221,0.85)';g.lineWidth=0.7;g.beginPath();g.arc(0,0,7.4,0,TAU);g.stroke();       // filet crème
     if(glyph)drawGlyph(g,glyph,0,0,12.4,'#fdf6e3',2.1);                                                         // empreinte
     g.restore();}
-  function markerAtPoint(px,py){let best=null,bd=15*15;for(const mk of markers){let p;try{p=map.project([mk.lng,mk.lat]);}catch(_){continue;}
-    const dx=p.x-px,dy=(p.y-21)-py,d=dx*dx+dy*dy;if(d<bd){bd=d;best=mk;}}return best;} // corps du repère = 21px au-dessus du point
+  function markerAtPoint(px,py){let best=null,bd=18*18;for(const mk of markers){let p;try{p=map.project([mk.lng,mk.lat]);}catch(_){continue;}
+    const dx=p.x-px,dy=(p.y-21*MK_PX)-py,d=dx*dx+dy*dy;if(d<bd){bd=d;best=mk;}}return best;} // corps du repère = 21×MK_PX px au-dessus du point
   const markerPop=()=>document.getElementById('markerPop');
   function closeMarkerPop(){const p=markerPop();if(p)p.classList.remove('show');}
   function openMarkerPop(mk){const p=markerPop();if(!p)return;let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){return;}
@@ -1135,7 +1135,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=49;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=50;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1476,7 +1476,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const PIN_TAIL_D='M -7.2 7.6 C -6.2 12.6 -2.6 14.2 0 21 C 2.6 14.2 6.2 12.6 7.2 7.6 Q 0 11.6 -7.2 7.6 Z';
   const FABLE_DEFS='<radialGradient id="ws" cx="0.38" cy="0.3" r="0.85"><stop offset="0" stop-color="#fff5e2" stop-opacity="0.5"/><stop offset="0.45" stop-color="#fff" stop-opacity="0"/><stop offset="0.8" stop-color="#3c000a" stop-opacity="0"/><stop offset="1" stop-color="#3c000a" stop-opacity="0.4"/></radialGradient><radialGradient id="wo" cx="0.38" cy="0.3" r="0.85"><stop offset="0" stop-color="#fff8e0" stop-opacity="0.55"/><stop offset="0.45" stop-color="#fff" stop-opacity="0"/><stop offset="0.8" stop-color="#2e1d00" stop-opacity="0"/><stop offset="1" stop-color="#2e1d00" stop-opacity="0.42"/></radialGradient><filter id="we" x="-35%" y="-35%" width="170%" height="170%"><feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="9" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="2.4"/></filter>';
   const SEAL_BOX=46, MK_BOX_W=32, MK_BOX_H=44, RASTER=3;   // unités SVG ; RASTER = suréchantillonnage pour la netteté
-  const SEAL_PX=42, MK_PX=1;                               // taille de rendu sur la carte
+  const SEAL_PX=50, MK_PX=1.2;                             // taille de rendu sur la carte (un peu agrandies pour bien voir les détails)
   function _pathBody(p,c){return '<path d="'+p+'" transform="translate(0.9 1.1)" fill="'+c.dep+'" stroke="'+c.dep+'" stroke-width="1.4" stroke-linejoin="round"/><g filter="url(#we)"><path d="'+p+'" fill="'+c.wax+'" stroke="'+c.wax+'" stroke-width="1.4" stroke-linejoin="round"/></g><path d="'+p+'" fill="url(#'+c.sh+')"/>';}
   function _sealSVG(shape,glyphD,sealed,px){px=px||SEAL_BOX*RASTER;
     var c=sealed?{dep:'#6e1522',wax:'#A4243B',sh:'ws',fil:'#f7ecd4',gl:'#f9efd9',glo:'1',sho:'0.3',flo:'0.9',flo2:'0.6'}
@@ -1636,7 +1636,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
           const img=sealImg(shp,P.g,false);
           if(img){fctx.save();fctx.globalAlpha=av;fctx.drawImage(img,pp.x-SEAL_PX/2,pp.y-SEAL_PX/2,SEAL_PX,SEAL_PX);fctx.restore();}
           else drawLocked(pp.x,pp.y,GLYPH_P[P.g]||GLYPH_P.curio,av,siteTier(P)); }
-        if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?17:14,disc:disc,prox:prox,av:av,g:P.g});}}
+        if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?21:17,disc:disc,prox:prox,av:av,g:P.g});}}
     // 3) placement glouton : débloqués d'abord, puis sites marquants, puis de haut en bas ; on saute tout nom qui en chevauche un déjà posé (le sceau reste)
     nameCands.sort((a,b)=>(b.disc-a.disc)||((NAME_PRIO[b.g]||0)-(NAME_PRIO[a.g]||0))||(a.y-b.y));
     fctx.font='600 10.5px '+FONT_SERIF;
@@ -1686,7 +1686,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
      fctx.save();fctx.translate(PS.x,PS.y);if(!noMotion)fctx.rotate((t%40000)/40000*TAU);
      fctx.strokeStyle='#B98A2E';fctx.lineWidth=0.9;fctx.setLineDash([2.2,3.6]);fctx.beginPath();fctx.arc(0,0,17,0,TAU);fctx.stroke();fctx.setLineDash([]);fctx.restore();
      // sceau carmin du joueur (plus tard : sa photo de profil dans l'anneau). Aucun texte dessous.
-     drawPlayerEmblem(PS.x,PS.y,12.4);}
+     drawPlayerEmblem(PS.x,PS.y,14.5);}
     // infobulle « marche jusqu'à ce lieu »
     if(tip){if(now>tip.until)tip=null;else{const tp=proj(tip.x,tip.y),msg='Marche jusqu\'à ce site pour le découvrir';
       fctx.font='italic 11px '+FONT_SERIF;const tw2=fctx.measureText(msg).width;
