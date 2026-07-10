@@ -341,13 +341,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   </defs></svg>
 
   <div id="identity" class="hud card" role="button" aria-label="Fiche de personnage">
-    <span class="crestbox"><svg class="crest" viewBox="0 0 38 38" aria-hidden="true">
-      <circle cx="19.6" cy="19.8" r="14.6" fill="#6e1522"/>
-      <circle cx="19" cy="19" r="14.4" fill="#A4243B"/>
-      <circle cx="19" cy="19" r="14.4" fill="url(#waxShadeH)"/>
-      <circle cx="19" cy="19" r="14" fill="none" stroke="#B08427" stroke-width="1.3"/><circle cx="19" cy="19" r="10.6" fill="none" stroke="#f7ecd4" stroke-width="0.9" stroke-opacity="0.85"/>
-      <path d="M12 3.4 L14.3 9.7 L20.6 12 L14.3 14.3 L12 20.6 L9.7 14.3 L3.4 12 L9.7 9.7 Z" transform="translate(9.4,9.4) scale(0.8)" fill="none" stroke="#f9efd9" stroke-width="1.8" stroke-linejoin="round"/>
-    </svg><i class="crest-photo" id="idPhoto"></i></span>
+    <span class="crestbox"><img class="crest" alt="" aria-hidden="true"><i class="crest-photo" id="idPhoto"></i></span>
     <div class="ident-text">
       <div id="pTitle">Voyageur</div>
       <div id="pSub">niveau 1</div>
@@ -393,12 +387,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="pp-grab"></div>
     <button class="cs-close" id="csClose" aria-label="Fermer">✕</button>
     <div class="cs-head">
-      <span class="crestbox" id="csCrest" title="Changer la photo de profil"><svg class="crest" viewBox="0 0 38 38" aria-hidden="true">
-        <circle cx="19.6" cy="19.8" r="14.6" fill="#6e1522"/><circle cx="19" cy="19" r="14.4" fill="#A4243B"/>
-        <circle cx="19" cy="19" r="14.4" fill="url(#waxShadeH)"/>
-        <circle cx="19" cy="19" r="14" fill="none" stroke="#B08427" stroke-width="1.3"/><circle cx="19" cy="19" r="10.6" fill="none" stroke="#f7ecd4" stroke-width="0.9" stroke-opacity="0.85"/>
-        <path d="M12 3.4 L14.3 9.7 L20.6 12 L14.3 14.3 L12 20.6 L9.7 14.3 L3.4 12 L9.7 9.7 Z" transform="translate(9.4,9.4) scale(0.8)" fill="none" stroke="#f9efd9" stroke-width="1.8" stroke-linejoin="round"/>
-      </svg><i class="crest-photo" id="csPhoto"></i><button class="crest-x" id="csPhotoX" aria-label="Retirer la photo">✕</button></span>
+      <span class="crestbox" id="csCrest" title="Changer la photo de profil"><img class="crest" alt="" aria-hidden="true"><i class="crest-photo" id="csPhoto"></i><button class="crest-x" id="csPhotoX" aria-label="Retirer la photo">✕</button></span>
       <div>
         <input id="csPseudo" maxlength="24" spellcheck="false" aria-label="Pseudo" value="Voyageur">
         <div class="cs-lvl" id="csLvl">niveau 1</div>
@@ -465,12 +454,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   <div id="welcome" class="hud">
     <div class="wc card">
-      <svg width="46" height="46" viewBox="0 0 38 38" aria-hidden="true">
-        <circle cx="19.6" cy="19.8" r="14.6" fill="#6e1522"/><circle cx="19" cy="19" r="14.4" fill="#A4243B"/>
-        <circle cx="19" cy="19" r="14.4" fill="url(#waxShadeH)"/>
-        <circle cx="19" cy="19" r="14" fill="none" stroke="#B08427" stroke-width="1.3"/><circle cx="19" cy="19" r="10.6" fill="none" stroke="#f7ecd4" stroke-width="0.9" stroke-opacity="0.85"/>
-        <path d="M12 3.4 L14.3 9.7 L20.6 12 L14.3 14.3 L12 20.6 L9.7 14.3 L3.4 12 L9.7 9.7 Z" transform="translate(9.4,9.4) scale(0.8)" fill="none" stroke="#f9efd9" stroke-width="1.8" stroke-linejoin="round"/>
-      </svg>
+      <img class="crest" alt="" aria-hidden="true" style="width:46px;height:46px">
       <h1>1001 Pas</h1>
       <div class="sub">atlas enluminé de votre vie</div>
       <p>Ta vraie vie devient une carte que tu révèles en marchant. Avance pour lever la brume, découvrir tes zones et leurs sites.</p>
@@ -1135,7 +1119,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=54;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=55;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1441,17 +1425,18 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(isStar){g.strokeStyle='rgba(247,236,212,0.6)';g.lineWidth=0.5;g.beginPath();g.arc(0,0,7.7,0,TAU);g.stroke();} // 2e filet (majeur)
     if(glyph)drawGlyph(g,glyph,0,0,isStar?13.8:14.8,'#f9efd9',2);                                          // empreinte (type)
     g.restore();}
-  // sceau du joueur : soit la PHOTO de profil (clippée dans l'anneau), soit le sceau étoilé par défaut
+  // Emblème du joueur : sceau de cire OR (couleur des marqueurs) au MÊME bord irrégulier que les sites, SANS filet crème.
+  // Par défaut = SILHOUETTE de personnage ; si photo de profil = photo clippée dans le sceau or.
   function drawPlayerEmblem(x,y,r){
-    if(!avatarImg){drawSeal(fctx,x,y,r,STAR_P,2.4,1);return;}
-    const g=fctx;g.save();
-    g.fillStyle='rgba(74,52,33,0.32)';g.beginPath();g.ellipse(x+0.5,y+r*1.1,r*0.66,r*0.22,0,0,TAU);g.fill();   // ombre au sol
-    g.fillStyle='#6e1522';g.beginPath();g.arc(x+0.9,y+1.1,r,0,TAU);g.fill();                                   // épaisseur
-    g.fillStyle='#6e1522';g.beginPath();g.arc(x,y,r,0,TAU);g.fill();                                            // fond carmin (photo transparente)
-    g.save();g.beginPath();g.arc(x,y,r-1.3,0,TAU);g.clip();const d=(r-1.3)*2;g.drawImage(avatarImg,x-(r-1.3),y-(r-1.3),d,d);g.restore(); // photo
-    g.strokeStyle='#B08427';g.lineWidth=1.3;g.beginPath();g.arc(x,y,r-0.6,0,TAU);g.stroke();                   // anneau d'or (même jaune que les marqueurs)
-    g.strokeStyle='rgba(247,236,212,0.85)';g.lineWidth=0.7;g.beginPath();g.arc(x,y,r-2.3,0,TAU);g.stroke();    // filet crème
-    g.restore();}
+    const px=2*r*24/19;   // boîte SVG (cire = 19u) → cire visible = 2r px
+    if(!avatarImg){const img=playerImg(true);
+      if(img)fctx.drawImage(img,x-px/2,y-px/2,px,px);
+      else{fctx.fillStyle='#B08427';fctx.beginPath();fctx.arc(x,y,r,0,TAU);fctx.fill();}   // repli le temps du raster
+      return;}
+    const base=playerImg(false);                                                            // socle or, sans glyphe
+    if(base)fctx.drawImage(base,x-px/2,y-px/2,px,px);
+    else{fctx.fillStyle='#B08427';fctx.beginPath();fctx.arc(x,y,r,0,TAU);fctx.fill();}
+    fctx.save();fctx.beginPath();fctx.arc(x,y,r-1.8,0,TAU);fctx.clip();const d=(r-1.8)*2;fctx.drawImage(avatarImg,x-(r-1.8),y-(r-1.8),d,d);fctx.restore();} // photo
   // lieu encore à découvrir : MÊME SILHOUETTE que le rang, en pointillé d'encre sur parchemin (le rang se lit déjà sous la brume — design Fable 5)
   function drawLocked(x,y,glyph,av,tier){const g=fctx;g.save();g.globalAlpha=av==null?1:av;g.translate(x,y);
     const isStar=tier==='major',isRose=tier==='notable';
@@ -1507,7 +1492,19 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function tierShape(t){return t==='major'?'star':t==='notable'?'diamond':'circle';}
   function sealImg(shape,glyphKey,sealed){return _cachedImg((sealed?'c':'l')+shape+glyphKey,_sealSVG(shape,GLYPHS[glyphKey]||GLYPHS.curio,sealed));}
   function markerImg(type){return _cachedImg('m'+type,_markerSVG(MGLYPHS[type]||MGLYPHS.drapeau));}
-  function prewarmSeals(){try{for(var k in GLYPHS){sealImg('star',k,true);sealImg('star',k,false);sealImg('diamond',k,true);sealImg('diamond',k,false);sealImg('circle',k,true);sealImg('circle',k,false);}for(var t in MGLYPHS)markerImg(t);}catch(_){}}
+  // ── EMBLÈME DU JOUEUR : sceau de cire OR (= couleur des marqueurs), MÊME bord irrégulier que les sites, SANS filet crème.
+  //    Par défaut = SILHOUETTE de personnage (glyphe tracé) ; sinon la photo de profil clippée dans le sceau.
+  const SILHOUETTE_D='M12 4.6 a3.4 3.4 0 1 0 0.01 0 M4.5 19 a8 8 0 0 1 15 0';   // tête + épaules (glyphe 24×24, 100% code)
+  function _playerSVG(glyphD,px){px=px||120;
+    var gl=glyphD?'<path d="'+glyphD+'" transform="translate(-9.6 -9.6) scale(0.8)" fill="none" stroke="#fdf6e3" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>':'';
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="'+px+'" height="'+px+'" viewBox="-12 -12 24 24"><defs>'+FABLE_DEFS+'</defs>'
+      +'<circle cx="0.8" cy="0.9" r="9.7" fill="#6f4c0d"/>'                 // épaisseur (or profond)
+      +'<g filter="url(#we)"><circle r="9.5" fill="#B08427"/></g>'         // cire OR + bord irrégulier (même filtre que les sites)
+      +'<circle r="9.5" fill="url(#wo)"/>'                                 // modelé or (pas de filet crème)
+      + gl +'</svg>';}
+  function playerImg(withGlyph){return _cachedImg('P'+(withGlyph?'1':'0'),_playerSVG(withGlyph?SILHOUETTE_D:null));}
+  try{var _pcu=svgURL(_playerSVG(SILHOUETTE_D));var _cr=document.querySelectorAll('img.crest');for(var _i=0;_i<_cr.length;_i++)_cr[_i].src=_pcu;}catch(_){}  // emblème HTML (barre d'identité / fiche / accueil) = le MÊME sceau
+  function prewarmSeals(){try{for(var k in GLYPHS){sealImg('star',k,true);sealImg('star',k,false);sealImg('diamond',k,true);sealImg('diamond',k,false);sealImg('circle',k,true);sealImg('circle',k,false);}for(var t in MGLYPHS)markerImg(t);playerImg(true);playerImg(false);}catch(_){}}
   try{setTimeout(prewarmSeals,1200);}catch(_){}   // pré-charge les variantes (pas de « pop » au 1er affichage) sans gêner le boot
   // vignettes HTML (fiche/recherche/en-têtes) : le SVG Fable en VECTEUR (net à toute taille)
   function sealDataURL(key,size,isRegion,tier,sealed){
@@ -1679,15 +1676,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       pill(midx,midy,'≈ '+routePas().toLocaleString('fr-FR')+' PAS');}
     // cible de marche
     if(control.target){const c=proj(control.target.x,control.target.y),pu=noMotion?0:2*Math.sin(t*0.006);fctx.strokeStyle='rgba(120,84,40,.6)';fctx.lineWidth=1.5;fctx.beginPath();fctx.arc(c.x,c.y,9+pu,0,TAU);fctx.stroke();}
-    // emblème du joueur : halo carmin pulsant + anneau d'or tournant + sceau étoilé + titre en cartouche
+    // emblème du joueur : halo carmin pulsant (repérage) + sceau de cire OR à silhouette
     if(z<4)blob(PS.x,PS.y,110,'232,185,60',0.32); // vue planète : clairière d'or sur « vos terres »
     {const pul=noMotion?0.5:0.5+0.5*Math.sin(t*TAU/3200),hr=34*(1+0.3*pul);
      const hg=fctx.createRadialGradient(PS.x,PS.y,0,PS.x,PS.y,hr);
      hg.addColorStop(0,'rgba(164,36,59,'+(0.5-0.32*pul)+')');hg.addColorStop(0.7,'rgba(164,36,59,'+(0.15-0.09*pul)+')');hg.addColorStop(1,'rgba(164,36,59,0)');
      fctx.fillStyle=hg;fctx.beginPath();fctx.arc(PS.x,PS.y,hr,0,TAU);fctx.fill();
-     fctx.save();fctx.translate(PS.x,PS.y);if(!noMotion)fctx.rotate((t%40000)/40000*TAU);
-     fctx.strokeStyle='#B08427';fctx.lineWidth=0.9;fctx.setLineDash([2.2,3.6]);fctx.beginPath();fctx.arc(0,0,21.5,0,TAU);fctx.stroke();fctx.setLineDash([]);fctx.restore();
-     // sceau carmin du joueur (plus tard : sa photo de profil dans l'anneau). Aucun texte dessous.
      drawPlayerEmblem(PS.x,PS.y,21);}
     // infobulle « marche jusqu'à ce lieu »
     if(tip){if(now>tip.until)tip=null;else{const tp=proj(tip.x,tip.y),msg='Marche jusqu\'à ce site pour le découvrir';
