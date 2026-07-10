@@ -644,18 +644,23 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     for(const p of (d.places||[])){const k=p.t+'|'+p.name+'|'+p.lng.toFixed(4);if(world._placeKeys.has(k))continue;world._placeKeys.add(k);world.places.push({x:toMx(p.lng),y:toMy(p.lat),name:p.name,t:p.t});}
     if(!world.commune)world.commune=computeCommune(world.places);
     let added=false;
+    // Rattachement à la commune SEULEMENT si le site est DANS son contour (pas juste dans la bbox rectangulaire) → fini les sites qui
+    // débordent hors de la commune. Test contre le polygone de la commune elle-même (identique sur tout appareil) → reste déterministe.
+    const fzZone=forZone?world._zoneById.get(forZone):null, fzRings=(fzZone&&fzZone.rings&&fzZone.rings.length)?fzZone.rings:null;
+    function inFz(px,py){if(!fzRings)return !!forZone;let ins=false;for(const r of fzRings)if(pointInRing(px,py,r))ins=!ins;return ins;}
     // Ingestion dans un ORDRE DÉTERMINISTE (par identité) → dans un même lot, le « survivant » du dédup nom+proximité ne dépend
     // plus de l'ordre d'arrivée réseau (résout la sensibilité à l'ordre des grappes homonymes au sein d'une réponse Overpass).
     const _pois=(d.pois||[]).slice().sort((a,b)=>{const ia=poiIdent(a),ib=poiIdent(b);return ia<ib?-1:ia>ib?1:0;});
     for(const P of _pois){const key=poiKey(P.lng,P.lat,P.n);const src=P.src||'tile';const px=toMx(P.lng),py=toMy(P.lat);
+      const tag=(forZone&&inFz(px,py))?forZone:null;   // rattaché à la commune uniquement si DANS son contour
       const ex=world._poiById.get(key);
-      if(ex){mergePoi(ex,P,src);if(forZone)ex._fz=forZone;continue;}
+      if(ex){mergePoi(ex,P,src);if(tag)ex._fz=tag;continue;}
       // Dédup secondaire : MÊME nom à faible distance = MÊME site. Les tuiles quantifient les coordonnées → clé (arrondie ~100 m)
       // parfois différente de celle d'Overpass pour un site identique → sans ça, doublons + comptes qui divergent test↔téléphone.
       const nm=normStr(P.n);let dup=null;const lst=world._poiByName.get(nm);
       if(lst)for(const e of lst){if(Math.hypot(e.x-px,e.y-py)<CONFIG.poi.dedup){dup=e;break;}}
-      if(dup){mergePoi(dup,P,src);if(forZone)dup._fz=forZone;continue;}
-      const P2={id:key,x:px,y:py,lng:P.lng,lat:P.lat,g:P.g,n:P.n,type:P.type,src:src,_fz:forZone||null,wiki:P.wiki||'',wd:P.wd||'',desc:P.desc||''};
+      if(dup){mergePoi(dup,P,src);if(tag)dup._fz=tag;continue;}
+      const P2={id:key,x:px,y:py,lng:P.lng,lat:P.lat,g:P.g,n:P.n,type:P.type,src:src,_fz:tag,wiki:P.wiki||'',wd:P.wd||'',desc:P.desc||''};
       world._poiById.set(key,P2);world.pois.push(P2);
       if(!world._poiByName.has(nm))world._poiByName.set(nm,[]);world._poiByName.get(nm).push(P2);
       added=true;}
@@ -1119,7 +1124,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=43;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=44;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
