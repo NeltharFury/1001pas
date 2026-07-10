@@ -1118,7 +1118,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=61;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=62;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1495,22 +1495,22 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // (pour rajouter des marqueurs plus tard, il suffit d'ajouter à MARKER_TYPES). Les empreintes sont dimensionnées pour NE PAS déborder.
   const WHEEL_ROUT=100, WHEEL_RIN=38, WHEEL_VB=220;   // rayon disque / rayon centre / viewBox (unités)
   function _wheelSVG(types){
-    var N=types.length, Ro=WHEEL_ROUT, Ri=WHEEL_RIN, Rg=(Ri+Ro)/2+3, step=2*Math.PI/N;
-    var gs=Math.min(Ro-Ri, Rg*step)/25;   // échelle empreinte : tient dans le quartier (radial ET angulaire) → ne dépasse pas
+    var N=types.length, Ro=WHEEL_ROUT, Ri=WHEEL_RIN, Rg=(Ri+2+Ro)/2, step=2*Math.PI/N, gapA=0.038;  // gapA = très léger espace angulaire entre quartiers
+    var gs=Math.min(Ro-(Ri+2), Rg*(step-2*gapA))/25;   // échelle empreinte : tient dans le quartier → ne déborde pas
+    function sect(rin,rout,a0,a1){var x0i=(Math.cos(a0)*rin).toFixed(2),y0i=(Math.sin(a0)*rin).toFixed(2),x0o=(Math.cos(a0)*rout).toFixed(2),y0o=(Math.sin(a0)*rout).toFixed(2),x1o=(Math.cos(a1)*rout).toFixed(2),y1o=(Math.sin(a1)*rout).toFixed(2),x1i=(Math.cos(a1)*rin).toFixed(2),y1i=(Math.sin(a1)*rin).toFixed(2),lg=(a1-a0)>Math.PI?1:0;
+      return 'M'+x0i+' '+y0i+' L'+x0o+' '+y0o+' A'+rout+' '+rout+' 0 '+lg+' 1 '+x1o+' '+y1o+' L'+x1i+' '+y1i+' A'+rin+' '+rin+' 0 '+lg+' 0 '+x0i+' '+y0i+' Z';}
     var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="-110 -110 '+WHEEL_VB+' '+WHEEL_VB+'" width="'+WHEEL_VB+'" height="'+WHEEL_VB+'"><defs>'+FABLE_DEFS
-      +'<filter id="wb" x="-15%" y="-15%" width="130%" height="130%"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="9" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="7"/></filter></defs>';
-    s+='<circle cx="1.2" cy="1.4" r="'+(Ro+1)+'" fill="#6f4c0d"/>';                              // épaisseur
-    s+='<g filter="url(#wb)"><circle r="'+Ro+'" fill="#B08427"/></g>';                           // cire OR + bord irrégulier
-    s+='<circle r="'+Ro+'" fill="url(#wo)"/>';                                                   // modelé or
-    s+='<circle r="'+(Ro-5)+'" fill="none" stroke="#fbf3dd" stroke-width="1.8" stroke-opacity="0.65"/>'; // filet crème extérieur
-    for(var i=0;i<N;i++){var ba=-Math.PI/2+(i+0.5)*step;                                         // séparateurs en rayons
-      s+='<line x1="'+(Math.cos(ba)*Ri).toFixed(1)+'" y1="'+(Math.sin(ba)*Ri).toFixed(1)+'" x2="'+(Math.cos(ba)*(Ro-4)).toFixed(1)+'" y2="'+(Math.sin(ba)*(Ro-4)).toFixed(1)+'" stroke="#fbf3dd" stroke-width="1.9" stroke-opacity="0.6" stroke-linecap="round"/>';}
-    for(var j=0;j<N;j++){var a=-Math.PI/2+j*step, gx=Math.cos(a)*Rg, gy=Math.sin(a)*Rg, g=MGLYPHS[types[j]]||MGLYPHS.drapeau;  // 1 empreinte / quartier
+      +'<filter id="ww" x="-12%" y="-12%" width="124%" height="124%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="9" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="3"/></filter></defs>';
+    s+='<circle r="'+(Ro+1)+'" fill="#43310f"/>';                                                // base sombre : les espaces entre quartiers la laissent voir (rainures)
+    s+='<g filter="url(#ww)">';                                                                  // QUARTIERS de cire OR, séparés par un léger espace, bord irrégulier
+    for(var i=0;i<N;i++){var ac=-Math.PI/2+i*step;s+='<path d="'+sect(Ri+2,Ro,ac-(step/2-gapA),ac+(step/2-gapA))+'" fill="#B08427"/>';}
+    s+='</g>';
+    s+='<circle r="'+Ro+'" fill="url(#wo)"/>';                                                   // modelé or (reflet crème = motif blanc, même style que les cachets)
+    for(var j=0;j<N;j++){var a=-Math.PI/2+j*step, gx=Math.cos(a)*Rg, gy=Math.sin(a)*Rg, g=MGLYPHS[types[j]]||MGLYPHS.drapeau;  // 1 empreinte crème / quartier
       s+='<path d="'+g+'" transform="translate('+gx.toFixed(1)+' '+gy.toFixed(1)+') scale('+gs.toFixed(3)+') translate(-12 -12)" fill="none" stroke="#fdf6e3" stroke-width="'+(2.4/gs).toFixed(2)+'" stroke-linecap="round" stroke-linejoin="round"/>';}
     s+='<circle cx="0.8" cy="1" r="'+(Ri+1)+'" fill="#000"/>';                                    // centre : cachet de cire NOIR
     s+='<g filter="url(#we)"><circle r="'+Ri+'" fill="#2b2724"/></g>';
     s+='<circle r="'+Ri+'" fill="url(#ws)"/>';
-    s+='<circle r="'+(Ri-3)+'" fill="none" stroke="#f7ecd4" stroke-width="1.2" stroke-opacity="0.45"/>';
     var rs=Ri*0.062;
     s+='<path d="'+MROUTE+'" transform="scale('+rs.toFixed(3)+') translate(-12 -12)" fill="#f7ecd4" stroke="#f7ecd4" stroke-width="0.6" stroke-linejoin="round"/>';  // flèche itinéraire
     return s+'</svg>';}
