@@ -731,7 +731,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function communeAt(x,y){if(!world||!world.communes)return null;let best=null;
     for(const c of world.communes){if(x<c.bb[0]||x>c.bb[2]||y<c.bb[1]||y>c.bb[3])continue;
       let inside=false;for(const r of c.rings)if(pointInRing(x,y,r))inside=!inside;
-      if(inside&&(!best||c.lvl>best.lvl))best=c;}return best;}
+      if(inside&&(!best||c.lvl>best.lvl||(c.lvl===best.lvl&&(''+c.id)<(''+best.id))))best=c;}return best;} // départage DÉTERMINISTE (id le plus petit) si 2 zones de même niveau se chevauchent → rattachement identique sur tout appareil (ne dépend plus de l'ordre de chargement)
   const zoneAt=communeAt;
   function ingestCommunes(list){if(!world)return;let add=false;
     for(const c of list){if(world._commIds.has(c.id))continue;world._commIds.add(c.id);
@@ -1116,7 +1116,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=38;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=39;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
