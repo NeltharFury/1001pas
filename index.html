@@ -623,7 +623,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     osmPending++;setLoading(true);
     let done=false,fails=0;const ctrls=eps.map(()=>{try{return new AbortController();}catch(_){return null;}});
     function finish(res){if(done)return;done=true;clearTimeout(to);ctrls.forEach(c=>{if(c){try{c.abort();}catch(_){}}});osmPending=Math.max(0,osmPending-1);if(osmPending<=0)setLoading(false);cb(res);}
-    const to=setTimeout(()=>{console.warn('Overpass: délai dépassé');finish(null);},18000);
+    const to=setTimeout(()=>{console.warn('Overpass: délai dépassé');finish(null);},35000); // 35 s : mesuré, 2 miroirs sur 3 mettent ~31 s pour la requête « toute la commune ». Course de miroirs → le rapide (~2 s) gagne quand dispo ; ce délai ne sert qu'au repli.
     eps.forEach((ep,i)=>{fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctrls[i]?ctrls[i].signal:undefined})
       .then(r=>r.ok?r.json():Promise.reject(r.status)).then(js=>{if(done)return;if(!js||!js.elements)return Promise.reject('noelem');finish(parseOverpass(js));})
       .catch(err=>{if(done)return;fails++;if(fails>=eps.length){console.warn('Overpass: tous les miroirs KO');finish(null);}});});
@@ -1111,7 +1111,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=31;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=32;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
