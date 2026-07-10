@@ -1118,7 +1118,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=62;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=63;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1495,20 +1495,28 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // (pour rajouter des marqueurs plus tard, il suffit d'ajouter à MARKER_TYPES). Les empreintes sont dimensionnées pour NE PAS déborder.
   const WHEEL_ROUT=100, WHEEL_RIN=38, WHEEL_VB=220;   // rayon disque / rayon centre / viewBox (unités)
   function _wheelSVG(types){
-    var N=types.length, Ro=WHEEL_ROUT, Ri=WHEEL_RIN, Rg=(Ri+2+Ro)/2, step=2*Math.PI/N, gapA=0.038;  // gapA = très léger espace angulaire entre quartiers
-    var gs=Math.min(Ro-(Ri+2), Rg*(step-2*gapA))/25;   // échelle empreinte : tient dans le quartier → ne déborde pas
-    function sect(rin,rout,a0,a1){var x0i=(Math.cos(a0)*rin).toFixed(2),y0i=(Math.sin(a0)*rin).toFixed(2),x0o=(Math.cos(a0)*rout).toFixed(2),y0o=(Math.sin(a0)*rout).toFixed(2),x1o=(Math.cos(a1)*rout).toFixed(2),y1o=(Math.sin(a1)*rout).toFixed(2),x1i=(Math.cos(a1)*rin).toFixed(2),y1i=(Math.sin(a1)*rin).toFixed(2),lg=(a1-a0)>Math.PI?1:0;
-      return 'M'+x0i+' '+y0i+' L'+x0o+' '+y0o+' A'+rout+' '+rout+' 0 '+lg+' 1 '+x1o+' '+y1o+' L'+x1i+' '+y1i+' A'+rin+' '+rin+' 0 '+lg+' 0 '+x0i+' '+y0i+' Z';}
+    var N=types.length, Ro=WHEEL_ROUT, Ri=WHEEL_RIN, G=6, Rin=Ri+G, Rg=(Rin+Ro)/2, step=2*Math.PI/N;  // G = ESPACE UNIFORME (entre quartiers ET autour du centre)
+    var gs=Math.min(Ro-Rin, Rg*step-2*G)/25;             // échelle empreinte : tient dans le quartier → ne déborde pas
+    var h=G/2, tin=Math.sqrt(Rin*Rin-h*h), tout=Math.sqrt(Ro*Ro-h*h);
+    function f(x){return x.toFixed(2);}
+    // quartier à BORDS DÉCALÉS (parallèles) → gouttière d'épaisseur constante G entre voisins ; fond transparent → la carte se voit dessous
+    function wedge(ac){var a0=ac-step/2,a1=ac+step/2,
+      n0x=-Math.sin(a0),n0y=Math.cos(a0),u0x=Math.cos(a0),u0y=Math.sin(a0),
+      n1x=Math.sin(a1),n1y=-Math.cos(a1),u1x=Math.cos(a1),u1y=Math.sin(a1),lg=step>Math.PI?1:0;
+      return 'M'+f(h*n0x+tin*u0x)+' '+f(h*n0y+tin*u0y)+' L'+f(h*n0x+tout*u0x)+' '+f(h*n0y+tout*u0y)
+        +' A'+Ro+' '+Ro+' 0 '+lg+' 1 '+f(h*n1x+tout*u1x)+' '+f(h*n1y+tout*u1y)
+        +' L'+f(h*n1x+tin*u1x)+' '+f(h*n1y+tin*u1y)
+        +' A'+Rin+' '+Rin+' 0 '+lg+' 0 '+f(h*n0x+tin*u0x)+' '+f(h*n0y+tin*u0y)+' Z';}
     var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="-110 -110 '+WHEEL_VB+' '+WHEEL_VB+'" width="'+WHEEL_VB+'" height="'+WHEEL_VB+'"><defs>'+FABLE_DEFS
-      +'<filter id="ww" x="-12%" y="-12%" width="124%" height="124%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="9" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="3"/></filter></defs>';
-    s+='<circle r="'+(Ro+1)+'" fill="#43310f"/>';                                                // base sombre : les espaces entre quartiers la laissent voir (rainures)
-    s+='<g filter="url(#ww)">';                                                                  // QUARTIERS de cire OR, séparés par un léger espace, bord irrégulier
-    for(var i=0;i<N;i++){var ac=-Math.PI/2+i*step;s+='<path d="'+sect(Ri+2,Ro,ac-(step/2-gapA),ac+(step/2-gapA))+'" fill="#B08427"/>';}
+      +'<filter id="ww" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="9" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="2"/></filter>'
+      +'<radialGradient id="wgU" gradientUnits="userSpaceOnUse" cx="-32" cy="-42" r="132"><stop offset="0" stop-color="#fff8e0" stop-opacity="0.5"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/><stop offset="0.85" stop-color="#2e1d00" stop-opacity="0"/><stop offset="1" stop-color="#2e1d00" stop-opacity="0.42"/></radialGradient></defs>';
+    s+='<g filter="url(#ww)">';                                                                  // QUARTIERS de cire OR ; les espaces restent TRANSPARENTS (carte visible)
+    for(var i=0;i<N;i++)s+='<path d="'+wedge(-Math.PI/2+i*step)+'" fill="#B08427"/>';
+    for(var i=0;i<N;i++)s+='<path d="'+wedge(-Math.PI/2+i*step)+'" fill="url(#wgU)"/>';           // modelé or global (reflet crème = motif blanc), uniquement sur les quartiers
     s+='</g>';
-    s+='<circle r="'+Ro+'" fill="url(#wo)"/>';                                                   // modelé or (reflet crème = motif blanc, même style que les cachets)
     for(var j=0;j<N;j++){var a=-Math.PI/2+j*step, gx=Math.cos(a)*Rg, gy=Math.sin(a)*Rg, g=MGLYPHS[types[j]]||MGLYPHS.drapeau;  // 1 empreinte crème / quartier
       s+='<path d="'+g+'" transform="translate('+gx.toFixed(1)+' '+gy.toFixed(1)+') scale('+gs.toFixed(3)+') translate(-12 -12)" fill="none" stroke="#fdf6e3" stroke-width="'+(2.4/gs).toFixed(2)+'" stroke-linecap="round" stroke-linejoin="round"/>';}
-    s+='<circle cx="0.8" cy="1" r="'+(Ri+1)+'" fill="#000"/>';                                    // centre : cachet de cire NOIR
+    s+='<circle cx="0.8" cy="1" r="'+(Ri+1)+'" fill="#000"/>';                                    // centre DÉTACHÉ (espace G) : cachet de cire NOIR
     s+='<g filter="url(#we)"><circle r="'+Ri+'" fill="#2b2724"/></g>';
     s+='<circle r="'+Ri+'" fill="url(#ws)"/>';
     var rs=Ri*0.062;
