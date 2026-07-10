@@ -1135,7 +1135,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=48;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=49;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1331,7 +1331,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     else poiSrc.classList.add('hidden');}
   function openPOI(P,R){poiPanel.classList.add('open');curPOI=P;
     const unlocked=state.discP.has(P.id);
-    poiIcon.style.backgroundImage='url('+(unlocked?sealDataURL(P.g,46,false,siteTier(P)):lockedDataURL(P.g,46))+')';
+    poiIcon.style.backgroundImage='url("'+sealDataURL(P.g,46,false,siteTier(P),unlocked)+'")';   // sceau Fable : carmin si débloqué, cire grise sinon
     poiName.textContent=P.n;poiType.textContent=(P.type||'Site')+' · '+R.name;
     poiRouteBtn.disabled=false;poiSrc.classList.add('hidden');   // itinéraire possible même vers un site verrouillé (pour aller le découvrir)
     const my=++poiReq;
@@ -1467,8 +1467,49 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     return p<0.55?1.8-(1.8-0.92)*(p/0.55):p<0.8?0.92+0.13*((p-0.55)/0.25):1.05-0.05*((p-0.8)/0.2);}
   function poiPhase(id){let h=0;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))|0;return (h>>>0)%628/100;}
   // vignettes (fiche + recherche) : mini-sceau / pastille en dataURL
-  function sealDataURL(key,size,isRegion,tier){const c=document.createElement('canvas');c.width=c.height=size*2;
-    const g=c.getContext('2d');g.scale(2,2);drawSeal(g,size/2,size/2-0.5,size*0.34,isRegion?STAR_P:(GLYPH_P[key]||GLYPH_P.curio),1.3,1,isRegion?'region':(tier||'minor'));return c.toDataURL();}
+  // ═══ SCEAUX & MARQUEURS « CIRE » EXACTS (design Fable 5) ═══
+  // Le bord IRRÉGULIER de la cire vient d'un filtre SVG feTurbulence+feDisplacementMap — IMPOSSIBLE en canvas 2D.
+  // On rend donc le VRAI SVG de Fable (filtre compris) puis on le pixellise en <img> qu'on pose sur la carte
+  // (et on l'utilise tel quel comme data-URL vecteur pour les vignettes HTML). Rangs : majeur=étoile 8 pointes,
+  // notable=LOSANGE (étoile 4 branches), mineur=pastille ; « à découvrir » = MÊME sceau en cire GRISE.
+  const STAR_MAP_D=_starD(0,0,17,12.5,8), DIAMOND_MAP_D=_starD(0,0,13,9.6,4);
+  const PIN_TAIL_D='M -7.2 7.6 C -6.2 12.6 -2.6 14.2 0 21 C 2.6 14.2 6.2 12.6 7.2 7.6 Q 0 11.6 -7.2 7.6 Z';
+  const FABLE_DEFS='<radialGradient id="ws" cx="0.38" cy="0.3" r="0.85"><stop offset="0" stop-color="#fff5e2" stop-opacity="0.5"/><stop offset="0.45" stop-color="#fff" stop-opacity="0"/><stop offset="0.8" stop-color="#3c000a" stop-opacity="0"/><stop offset="1" stop-color="#3c000a" stop-opacity="0.4"/></radialGradient><radialGradient id="wo" cx="0.38" cy="0.3" r="0.85"><stop offset="0" stop-color="#fff8e0" stop-opacity="0.55"/><stop offset="0.45" stop-color="#fff" stop-opacity="0"/><stop offset="0.8" stop-color="#2e1d00" stop-opacity="0"/><stop offset="1" stop-color="#2e1d00" stop-opacity="0.42"/></radialGradient><filter id="we" x="-35%" y="-35%" width="170%" height="170%"><feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="9" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="2.4"/></filter>';
+  const SEAL_BOX=46, MK_BOX_W=32, MK_BOX_H=44, RASTER=3;   // unités SVG ; RASTER = suréchantillonnage pour la netteté
+  const SEAL_PX=42, MK_PX=1;                               // taille de rendu sur la carte
+  function _pathBody(p,c){return '<path d="'+p+'" transform="translate(0.9 1.1)" fill="'+c.dep+'" stroke="'+c.dep+'" stroke-width="1.4" stroke-linejoin="round"/><g filter="url(#we)"><path d="'+p+'" fill="'+c.wax+'" stroke="'+c.wax+'" stroke-width="1.4" stroke-linejoin="round"/></g><path d="'+p+'" fill="url(#'+c.sh+')"/>';}
+  function _sealSVG(shape,glyphD,sealed,px){px=px||SEAL_BOX*RASTER;
+    var c=sealed?{dep:'#6e1522',wax:'#A4243B',sh:'ws',fil:'#f7ecd4',gl:'#f9efd9',glo:'1',sho:'0.3',flo:'0.9',flo2:'0.6'}
+                :{dep:'#4f4a40',wax:'#948b7c',sh:'wo',fil:'#e9e1cd',gl:'#efe8d6',glo:'0.9',sho:'0.25',flo:'0.75',flo2:'0.5'};
+    var sh,body,fil,gtf;
+    if(shape==='star'){sh='<ellipse cx="0.5" cy="15.5" rx="10" ry="2.7" fill="#4A3421" fill-opacity="'+c.sho+'"/>';body=_pathBody(STAR_MAP_D,c);
+      fil='<circle r="9.2" fill="none" stroke="'+c.fil+'" stroke-width="0.8" stroke-opacity="'+c.flo+'"/><circle r="8" fill="none" stroke="'+c.fil+'" stroke-width="0.5" stroke-opacity="'+c.flo2+'"/>';gtf='translate(-7.2 -7.2) scale(0.6)';}
+    else if(shape==='diamond'){sh='<ellipse cx="0.5" cy="14.5" rx="8.5" ry="2.5" fill="#4A3421" fill-opacity="'+c.sho+'"/>';body=_pathBody(DIAMOND_MAP_D,c);
+      fil='<circle r="7.4" fill="none" stroke="'+c.fil+'" stroke-width="0.7" stroke-opacity="'+c.flo+'"/>';gtf='translate(-6.6 -6.6) scale(0.55)';}
+    else{sh='<ellipse cx="0.5" cy="11.5" rx="6.8" ry="2.1" fill="#4A3421" fill-opacity="'+c.sho+'"/>';
+      body='<circle cx="0.8" cy="0.9" r="9.7" fill="'+c.dep+'"/><g filter="url(#we)"><circle r="9.5" fill="'+c.wax+'"/></g><circle r="9.5" fill="url(#'+c.sh+')"/>';
+      fil='<circle r="6.9" fill="none" stroke="'+c.fil+'" stroke-width="0.7" stroke-opacity="'+c.flo+'"/>';gtf='translate(-6 -6) scale(0.5)';}
+    var gl=glyphD?'<path d="'+glyphD+'" transform="'+gtf+'" fill="none" stroke="'+c.gl+'" stroke-width="2" stroke-opacity="'+c.glo+'" stroke-linecap="round" stroke-linejoin="round"/>':'';
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="'+px+'" height="'+px+'" viewBox="'+(-SEAL_BOX/2)+' '+(-SEAL_BOX/2)+' '+SEAL_BOX+' '+SEAL_BOX+'"><defs>'+FABLE_DEFS+'</defs>'+sh+body+fil+gl+'</svg>';}
+  function _markerSVG(glyphD){var gl=glyphD?'<path d="'+glyphD+'" transform="translate(-6.2 -6.2) scale(0.515)" fill="none" stroke="#fdf6e3" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>':'';
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="'+(MK_BOX_W*RASTER)+'" height="'+(MK_BOX_H*RASTER)+'" viewBox="-16 -16 32 44"><defs>'+FABLE_DEFS+'</defs>'
+      +'<ellipse cx="0.3" cy="23.5" rx="5" ry="1.6" fill="#4A3421" fill-opacity="0.3"/>'
+      +'<g transform="translate(0.8 1)"><circle r="10.5" fill="#6f4c0d"/><path d="'+PIN_TAIL_D+'" fill="#6f4c0d"/></g>'
+      +'<g filter="url(#we)"><circle r="10.5" fill="#B08427"/><path d="'+PIN_TAIL_D+'" fill="#B08427"/></g>'
+      +'<circle r="10.5" fill="url(#wo)"/><circle r="7.4" fill="none" stroke="#fbf3dd" stroke-width="0.7" stroke-opacity="0.8"/>'+gl+'</svg>';}
+  function svgURL(svg){return 'data:image/svg+xml,'+encodeURIComponent(svg);}
+  const _imgCache=new Map();
+  function _cachedImg(key,svg){var e=_imgCache.get(key);if(e)return e.ready?e.img:null;
+    var img=new Image();e={img:img,ready:false};_imgCache.set(key,e);
+    img.onload=function(){e.ready=true;if(window.__wake)__wake(300);};img.src=svgURL(svg);return null;}
+  function tierShape(t){return t==='major'?'star':t==='notable'?'diamond':'circle';}
+  function sealImg(shape,glyphKey,sealed){return _cachedImg((sealed?'c':'l')+shape+glyphKey,_sealSVG(shape,GLYPHS[glyphKey]||GLYPHS.curio,sealed));}
+  function markerImg(type){return _cachedImg('m'+type,_markerSVG(MGLYPHS[type]||MGLYPHS.drapeau));}
+  function prewarmSeals(){try{for(var k in GLYPHS){sealImg('star',k,true);sealImg('star',k,false);sealImg('diamond',k,true);sealImg('diamond',k,false);sealImg('circle',k,true);sealImg('circle',k,false);}for(var t in MGLYPHS)markerImg(t);}catch(_){}}
+  try{setTimeout(prewarmSeals,1200);}catch(_){}   // pré-charge les variantes (pas de « pop » au 1er affichage) sans gêner le boot
+  // vignettes HTML (fiche/recherche/en-têtes) : le SVG Fable en VECTEUR (net à toute taille)
+  function sealDataURL(key,size,isRegion,tier,sealed){
+    return svgURL(_sealSVG(isRegion?'circle':tierShape(tier),isRegion?STAR8:(GLYPHS[key]||GLYPHS.curio),sealed!==false,size||24));}
   function lockedDataURL(key,size){const c=document.createElement('canvas');c.width=c.height=size*2;const g=c.getContext('2d');g.scale(2,2);
     g.beginPath();g.arc(size/2,size/2,size*0.4,0,TAU);g.fillStyle='rgba(239,223,180,0.95)';g.fill();
     g.setLineDash([2.4,2.8]);g.lineWidth=1.2;g.strokeStyle='rgba(107,82,51,0.9)';g.stroke();g.setLineDash([]);
@@ -1581,15 +1622,20 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       for(let i=0;i<Z.pois.length;i++){const P=Z.pois[i],pp=proj(P.x,P.y);if(pp.x<-30||pp.x>W+30||pp.y<-30||pp.y>H+30)continue;
         const disc=state.discP.has(P.id);
         const dist=Math.hypot(state.pl.x-P.x,state.pl.y-P.y),prox=clamp((CONFIG.poi.nameRadius-dist)/CONFIG.poi.nameRadius,0,1);
+        const shp=tierShape(siteTier(P));
         if(disc){let sc=1;
           if(P.tSeal)sc=stampScale(clamp((now-P.tSeal)/550,0,1));                       // débloqué à l'instant
           else if(Z.tDisc)sc=stampScale(clamp((now-Z.tDisc-600-i*130)/550,0,1));        // contrée fraîche : sceaux frappés un à un
-          if(sc>0.001){fctx.save();if(sc!==1){fctx.translate(pp.x,pp.y);fctx.scale(sc,sc);fctx.translate(-pp.x,-pp.y);}
-            drawSeal(fctx,pp.x,pp.y,12,GLYPH_P[P.g]||GLYPH_P.curio,poiPhase(P.id),av,siteTier(P));fctx.restore();}
+          if(sc>0.001){const img=sealImg(shp,P.g,true);fctx.save();if(sc!==1){fctx.translate(pp.x,pp.y);fctx.scale(sc,sc);fctx.translate(-pp.x,-pp.y);}
+            if(img){fctx.globalAlpha=av;fctx.drawImage(img,pp.x-SEAL_PX/2,pp.y-SEAL_PX/2,SEAL_PX,SEAL_PX);}
+            else drawSeal(fctx,pp.x,pp.y,12,GLYPH_P[P.g]||GLYPH_P.curio,poiPhase(P.id),av,siteTier(P));   // repli lisse le temps du raster
+            fctx.restore();}
         }else{ if(progOpen){ var sph=(now%1900)/1900, sph2=(sph+0.5)%1;   // SONAR (SEULEMENT si la progression est ouverte) : anneaux carmin qui s'étendent — plus vifs
             fctx.beginPath();fctx.arc(pp.x,pp.y,5+sph*19,0,TAU);fctx.strokeStyle='rgba(164,36,59,'+((1-sph)*0.9*av)+')';fctx.lineWidth=2.8;fctx.stroke();
             fctx.beginPath();fctx.arc(pp.x,pp.y,5+sph2*19,0,TAU);fctx.strokeStyle='rgba(164,36,59,'+((1-sph2)*0.6*av)+')';fctx.lineWidth=2;fctx.stroke(); }
-          drawLocked(pp.x,pp.y,GLYPH_P[P.g]||GLYPH_P.curio,av,siteTier(P)); }
+          const img=sealImg(shp,P.g,false);
+          if(img){fctx.save();fctx.globalAlpha=av;fctx.drawImage(img,pp.x-SEAL_PX/2,pp.y-SEAL_PX/2,SEAL_PX,SEAL_PX);fctx.restore();}
+          else drawLocked(pp.x,pp.y,GLYPH_P[P.g]||GLYPH_P.curio,av,siteTier(P)); }
         if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?17:14,disc:disc,prox:prox,av:av,g:P.g});}}
     // 3) placement glouton : débloqués d'abord, puis sites marquants, puis de haut en bas ; on saute tout nom qui en chevauche un déjà posé (le sceau reste)
     nameCands.sort((a,b)=>(b.disc-a.disc)||((NAME_PRIO[b.g]||0)-(NAME_PRIO[a.g]||0))||(a.y-b.y));
@@ -1607,7 +1653,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     // REPÈRES de l'utilisateur (goutte de cire d'OR) — au-dessus des sites, sous le joueur
     if(z>=12&&markers.length)for(const mk of markers){let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){continue;}
       if(mp.x<-24||mp.x>W+24||mp.y<-6||mp.y>H+40)continue;
-      drawMarkerDrop(mp.x,mp.y,MGLYPH_P[mk.type]||MGLYPH_P.drapeau);}
+      const img=markerImg(mk.type);
+      if(img)fctx.drawImage(img,mp.x-16*MK_PX,mp.y-37*MK_PX,MK_BOX_W*MK_PX,MK_BOX_H*MK_PX);   // pointe (unité 0,21) ancrée au point exact
+      else drawMarkerDrop(mp.x,mp.y,MGLYPH_P[mk.type]||MGLYPH_P.drapeau);}
     const PS=proj(state.pl.x,state.pl.y);
     // itinéraire : PERSONNAGE → cible, suit les VRAIES routes (poly OSRM), la portion déjà faite disparaît
     if(route){const rp=proj(route.x,route.y);
