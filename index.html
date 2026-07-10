@@ -677,11 +677,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Identité INDÉPENDANTE DE LA SOURCE (nom + coords exactes) → identique sur tout appareil une fois le site connu d'Overpass
   // (l'id, lui, peut varier selon quelle source est arrivée en 1re). C'est ce qui rend le départage vraiment déterministe.
   function poiIdent(p){return normStr(p.n)+'@'+(p.lng!=null?p.lng.toFixed(4):'')+','+(p.lat!=null?p.lat.toFixed(4):'');}
-  // Ordre de SÉLECTION des sites d'une zone — 100 % DÉTERMINISTE (identique sur tout appareil et à chaque ouverture) :
-  //  1) déjà découverts d'abord (on ne perd JAMAIS une découverte)  2) Overpass (déterministe) avant tuiles (variables)
-  //  3) sites marquants d'abord  4) hash stable de l'identité → départage constant, sans dépendre de l'ordre d'arrivée réseau.
+  // Ordre de SÉLECTION des sites d'une zone — 100 % DÉTERMINISTE et INDÉPENDANT de ce qu'on a découvert (→ les 18 sites d'une
+  // commune sont TOUJOURS les mêmes sur tout appareil ; la découverte n'apparaît qu'en « scellé » dessus, elle ne change plus la liste) :
+  //  1) Overpass (déterministe) avant tuiles (variables)  2) sites marquants d'abord  3) hash stable de l'identité → départage constant.
   function poiSelCmp(a,b){
-    const ad=state.discP.has(a.id)?0:1,bd=state.discP.has(b.id)?0:1;if(ad!==bd)return ad-bd;
     const as=(a.src==='osm')?0:1,bs=(b.src==='osm')?0:1;if(as!==bs)return as-bs;
     const ar=SITE_RANK[a.g]||0,br=SITE_RANK[b.g]||0;if(ar!==br)return br-ar;
     const ia=poiIdent(a),ib=poiIdent(b),ha=poiHash(ia),hb=poiHash(ib);if(ha!==hb)return ha-hb;
@@ -697,8 +696,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const byCell=new Map();let reach=0;
     for(const z of world.communes){let arr=byZone.get(z.id);if(!arr)continue;
       arr.sort(poiSelCmp);
-      let disc=0;for(const p of arr)if(state.discP.has(p.id))disc++;
-      const cap=Math.max(POI_PER_CELL,disc);           // jamais rogner en dessous des sites déjà découverts
+      const cap=POI_PER_CELL;                          // TOP-18 FIXE par rang (plus « découverts d'abord ») → les 18 sites sont les mêmes partout, quelle que soit ta progression
       z.pois=arr.length>cap?arr.slice(0,cap):arr;
       // _sel = fait partie de la SÉLECTION plafonnée. TOUS les chemins de déblocage (marche, rétro, arrière-plan) s'y limitent
       // → « atteignable = affiché = compté » identique partout ; un site au-delà du top-18 n'est débloqué par AUCUN chemin.
@@ -1121,7 +1119,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=41;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=42;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
