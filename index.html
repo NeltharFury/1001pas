@@ -101,7 +101,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   /* ── identité : image + pseudo + niveau + XP (toucher = fiche de personnage) ── */
   #identity{top:12px;left:13px;display:flex;gap:10px;align-items:center;padding:8px 14px 9px 9px;max-width:70vw;cursor:pointer;}
-  .crest{width:42px;height:42px;flex:0 0 auto;border-radius:50%;}
+  .crest{width:56px;height:56px;flex:0 0 auto;border-radius:50%;}   /* emblème du joueur : MÊME taille partout (barre d'identité + fiche) */
   .crestbox{position:relative;flex:0 0 auto;display:inline-flex;line-height:0;}
   .crest-photo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:72%;height:72%;border-radius:50%;
     background-size:cover;background-position:center;display:none;box-shadow:0 0 0 1px rgba(110,21,34,.55);}
@@ -1135,7 +1135,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=52;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=53;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1681,14 +1681,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(control.target){const c=proj(control.target.x,control.target.y),pu=noMotion?0:2*Math.sin(t*0.006);fctx.strokeStyle='rgba(120,84,40,.6)';fctx.lineWidth=1.5;fctx.beginPath();fctx.arc(c.x,c.y,9+pu,0,TAU);fctx.stroke();}
     // emblème du joueur : halo carmin pulsant + anneau d'or tournant + sceau étoilé + titre en cartouche
     if(z<4)blob(PS.x,PS.y,110,'232,185,60',0.32); // vue planète : clairière d'or sur « vos terres »
-    {const pul=noMotion?0.5:0.5+0.5*Math.sin(t*TAU/3200),hr=27*(1+0.3*pul);
+    {const pul=noMotion?0.5:0.5+0.5*Math.sin(t*TAU/3200),hr=34*(1+0.3*pul);
      const hg=fctx.createRadialGradient(PS.x,PS.y,0,PS.x,PS.y,hr);
      hg.addColorStop(0,'rgba(164,36,59,'+(0.5-0.32*pul)+')');hg.addColorStop(0.7,'rgba(164,36,59,'+(0.15-0.09*pul)+')');hg.addColorStop(1,'rgba(164,36,59,0)');
      fctx.fillStyle=hg;fctx.beginPath();fctx.arc(PS.x,PS.y,hr,0,TAU);fctx.fill();
      fctx.save();fctx.translate(PS.x,PS.y);if(!noMotion)fctx.rotate((t%40000)/40000*TAU);
-     fctx.strokeStyle='#B98A2E';fctx.lineWidth=0.9;fctx.setLineDash([2.2,3.6]);fctx.beginPath();fctx.arc(0,0,17,0,TAU);fctx.stroke();fctx.setLineDash([]);fctx.restore();
+     fctx.strokeStyle='#B98A2E';fctx.lineWidth=0.9;fctx.setLineDash([2.2,3.6]);fctx.beginPath();fctx.arc(0,0,21.5,0,TAU);fctx.stroke();fctx.setLineDash([]);fctx.restore();
      // sceau carmin du joueur (plus tard : sa photo de profil dans l'anneau). Aucun texte dessous.
-     drawPlayerEmblem(PS.x,PS.y,16.5);}
+     drawPlayerEmblem(PS.x,PS.y,21);}
     // infobulle « marche jusqu'à ce lieu »
     if(tip){if(now>tip.until)tip=null;else{const tp=proj(tip.x,tip.y),msg='Marche jusqu\'à ce site pour le découvrir';
       fctx.font='italic 11px '+FONT_SERIF;const tw2=fctx.measureText(msg).width;
