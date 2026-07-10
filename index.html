@@ -619,7 +619,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Course de MIROIRS Overpass sur une bbox EXPLICITE (le 1er qui répond gagne) → cb(parseOverpass(js)) ou cb(null).
   function overpassFetchBB(bb,cb){
     const q=overpassQuery(bb);
-    const eps=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
+    const eps=['https://overpass.osm.ch/api/interpreter','https://overpass-api.de/api/interpreter','https://overpass.openstreetmap.fr/api/interpreter']; // miroirs RAPIDES (mesurés ~1-2s) : suisse (idéal Neuchâtel) + de + fr. (kumi/private.coffee retirés : ~31s ou muets → polluaient la course)
     osmPending++;setLoading(true);
     let done=false,fails=0;const ctrls=eps.map(()=>{try{return new AbortController();}catch(_){return null;}});
     function finish(res){if(done)return;done=true;clearTimeout(to);ctrls.forEach(c=>{if(c){try{c.abort();}catch(_){}}});osmPending=Math.max(0,osmPending-1);if(osmPending<=0)setLoading(false);cb(res);}
@@ -867,7 +867,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const sw=mToLngLat(z.bb[0],z.bb[1]),ne=mToLngLat(z.bb[2],z.bb[3]); // bbox lng/lat ABSOLUE (l'offset world.C s'annule → identique partout)
     const midLat=(sw[1]+ne[1])/2,spanLng=Math.abs(ne[0]-sw[0])*111320*Math.cos(midLat*Math.PI/180),spanLat=Math.abs(ne[1]-sw[1])*LATM;
     if(!isFinite(spanLng)||!isFinite(spanLat)||Math.max(spanLng,spanLat)>14000){world._zsDone.add(z.id);return;} // démesuré/invalide → done, le chargement par position gère
-    const ck='pas1001_osm_z2_'+z.id;                      // v2 (invalide les caches partiels d'avant) ; namespace 'pas1001_osm_' → purgeOsmCache gère
+    const ck='pas1001_osm_z3_'+z.id;                      // v3 (invalide les caches partiels/tronqués d'avant, dont le « 67 » figé) ; namespace 'pas1001_osm_' → purgeOsmCache gère
     let cached=null;try{cached=JSON.parse(localStorage.getItem(ck)||'null');}catch(e){}
     if(cached&&cached.pois&&cached.pois.length){world._zsDone.add(z.id);setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached);},0);return;} // ingest différé (anti ré-entrance depuis reindexPois)
     if(world._zsBusy.size>=2){zoneRetry(z,1500);return;} // throttle : au plus 2 fetch // → relance PAR TIMER (jamais par le mouvement)
@@ -875,7 +875,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const bb=sw[1]+','+sw[0]+','+ne[1]+','+ne[0];         // Overpass = south,west,north,east
     overpassFetchBB(bb,d=>{ world._zsBusy.delete(z.id);
       if(d){world._zsDone.add(z.id);ingestOSM(d);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
-      else{z._zsTry=(z._zsTry||0)+1;if(z._zsTry<6)zoneRetry(z,3000+z._zsTry*3000);else world._zsDone.add(z.id);} // ÉCHEC → retry borné par timer ; après 6 → DONE (stop net, plus de boucle ; repli sur le vivier par position)
+      else{z._zsTry=(z._zsTry||0)+1;if(z._zsTry<=12)zoneRetry(z,Math.min(60000,4000+z._zsTry*5000));else world._zsDone.add(z.id);} // ÉCHEC → retry borné (12×, backoff jusqu'à 60s ≈ 8 min) : si Overpass est momentanément down, ça se répare TOUT SEUL à son retour ; après 12 → abandon session (repli vivier par position ; re-tenté au prochain chargement)
     });
   }
   // Un seul timer de relance en vol par zone (throttle/échec) ; ne relance que si toujours pertinent (découverte, ni faite ni en cours).
@@ -1116,7 +1116,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=36;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=37;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
