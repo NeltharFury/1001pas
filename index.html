@@ -869,12 +869,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!isFinite(spanLng)||!isFinite(spanLat)||Math.max(spanLng,spanLat)>14000){world._zsDone.add(z.id);return;} // démesuré/invalide → done, le chargement par position gère
     const ck='pas1001_osm_z3_'+z.id;                      // v3 (invalide les caches partiels/tronqués d'avant, dont le « 67 » figé) ; namespace 'pas1001_osm_' → purgeOsmCache gère
     let cached=null;try{cached=JSON.parse(localStorage.getItem(ck)||'null');}catch(e){}
-    if(cached&&cached.pois&&cached.pois.length){world._zsDone.add(z.id);setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached);},0);return;} // ingest différé (anti ré-entrance depuis reindexPois)
+    if(cached&&cached.pois&&cached.pois.length){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=cached.pois.length;setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached);},0);return;} // ingest différé (anti ré-entrance depuis reindexPois)
     if(world._zsBusy.size>=2){zoneRetry(z,1500);return;} // throttle : au plus 2 fetch // → relance PAR TIMER (jamais par le mouvement)
     world._zsBusy.add(z.id);
     const bb=sw[1]+','+sw[0]+','+ne[1]+','+ne[0];         // Overpass = south,west,north,east
     overpassFetchBB(bb,d=>{ world._zsBusy.delete(z.id);
-      if(d){world._zsDone.add(z.id);ingestOSM(d);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
+      if(d){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=(d.pois?d.pois.length:0);ingestOSM(d);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
       else{z._zsTry=(z._zsTry||0)+1;if(z._zsTry<=12)zoneRetry(z,Math.min(60000,4000+z._zsTry*5000));else world._zsDone.add(z.id);} // ÉCHEC → retry borné (12×, backoff jusqu'à 60s ≈ 8 min) : si Overpass est momentanément down, ça se répare TOUT SEUL à son retour ; après 12 → abandon session (repli vivier par position ; re-tenté au prochain chargement)
     });
   }
@@ -1116,7 +1116,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=37;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=38;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1130,9 +1130,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!Z||!Z.discovered){nEl.textContent='Zone inconnue';sEl.textContent='Entre dans une zone pour voir sa progression';bEl.style.width='0%';tEl.innerHTML='';return;}
     const pois=Z.pois||[],tot=pois.length,got=pois.filter(function(p){return state.discP.has(p.id);}).length,done=state.compR.has(Z.id);
     var raw=0;for(var pi=0;pi<world.pois.length;pi++)if(world.pois[pi]._zone===Z.id)raw++;   // vivier BRUT de la zone (avant plafond) — DIAGNOSTIC : doit être identique sur tout appareil
+    // état du chargement du vivier de la zone (diagnostic) : complet ✓ / en cours / échec réseau
+    var zst = Z._sitesFull ? ('vivier ✓ '+(Z._sitesFetched!=null?'('+Z._sitesFetched+' reçus)':''))
+      : ((world._zsBusy&&world._zsBusy.has(Z.id))||Z._zsSched) ? 'chargement…'
+      : (world._zsDone&&world._zsDone.has(Z.id)) ? 'échec réseau ✗' : 'en attente';
     nEl.innerHTML=escHtml(Z.name)+(done?' <span class="pz-star">★</span>':'');
     const pctz=tot?Math.round(got/tot*100):100;
-    sEl.textContent=got+' / '+tot+' sites · '+pctz+' % · '+raw+' recensés';
+    sEl.textContent=got+' / '+tot+' sites · '+pctz+' % · '+raw+' recensés · '+zst;
     bEl.style.width=pctz+'%';
     // une ligne PAR TYPE présent dans la contrée : symbole + nom + trouvés/total
     let h='';
