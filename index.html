@@ -863,7 +863,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!world||!z||!z.bb)return;
     if(!world._zsDone)world._zsDone=new Set();
     if(!world._zsBusy)world._zsBusy=new Set();
-    if(world._zsDone.has(z.id)||world._zsBusy.has(z.id))return;
+    if(world._zsDone.has(z.id)||world._zsBusy.has(z.id)||z._zsSched)return; // fini / en cours / retry DÉJÀ programmé → le mouvement ne relance rien (anti-boucle)
     const sw=mToLngLat(z.bb[0],z.bb[1]),ne=mToLngLat(z.bb[2],z.bb[3]); // bbox lng/lat ABSOLUE (l'offset world.C s'annule → identique partout)
     const midLat=(sw[1]+ne[1])/2,spanLng=Math.abs(ne[0]-sw[0])*111320*Math.cos(midLat*Math.PI/180),spanLat=Math.abs(ne[1]-sw[1])*LATM;
     if(!isFinite(spanLng)||!isFinite(spanLat)||Math.max(spanLng,spanLat)>14000){world._zsDone.add(z.id);return;} // démesuré/invalide → done, le chargement par position gère
@@ -1116,7 +1116,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=35;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=36;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
