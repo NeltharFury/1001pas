@@ -230,15 +230,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   /* ── REPÈRES : roue radiale (clic long) + popup ── */
   #markerWheel{position:absolute;z-index:14;width:0;height:0;pointer-events:none;}
   #markerWheel.open{pointer-events:auto;}
-  #markerWheel .mw-petal,#markerWheel .mw-center{position:absolute;transform:translate(-50%,-50%) scale(.2);opacity:0;
-    transition:transform .18s cubic-bezier(.2,1.35,.4,1),opacity .16s ease;border-radius:50%;border:1px solid rgba(74,52,33,.5);
-    background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.6),0 5px 14px rgba(40,24,6,.35);
-    cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
-  #markerWheel.open .mw-petal,#markerWheel.open .mw-center{transform:translate(-50%,-50%) scale(1);opacity:1;}
-  #markerWheel .mw-petal{width:66px;height:92px;left:0;top:0;background:none;border:0;box-shadow:none;border-radius:0;}   /* pétale = la goutte du marqueur à la taille TERRAIN, plus de bouton parchemin */
-  #markerWheel .mw-center{width:56px;height:56px;left:0;top:0;background:none;border:0;box-shadow:none;border-radius:0;}
-  #markerWheel .mw-petal img{width:auto;height:88px;display:block;filter:drop-shadow(0 1px 2px rgba(40,24,6,.55));} #markerWheel .mw-center img{width:54px;height:54px;display:block;filter:drop-shadow(0 1px 2px rgba(40,24,6,.55));}
-  #markerWheel .mw-petal:active,#markerWheel .mw-center:active{transform:translate(-50%,-50%) scale(.9);}
+  #markerWheel .mw-disc{position:absolute;left:0;top:0;transform:translate(-50%,-50%) scale(.2);opacity:0;cursor:pointer;
+    transition:transform .2s cubic-bezier(.2,1.35,.4,1),opacity .16s ease;filter:drop-shadow(0 7px 18px rgba(40,24,6,.5));}
+  #markerWheel.open .mw-disc{transform:translate(-50%,-50%) scale(1);opacity:1;}
+  #markerWheel .mw-disc img{display:block;width:210px;height:210px;}
+  #markerWheel .mw-disc:active{transform:translate(-50%,-50%) scale(.97);}
   #markerPop{z-index:14;padding:11px 13px;display:none;flex-direction:column;gap:8px;min-width:150px;max-width:210px;}
   #markerPop.show{display:flex;animation:riseIn .2s ease both;}
   #markerPop .mp-t{font-family:var(--display);font-size:13px;color:var(--ink);}
@@ -1038,15 +1034,18 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const px=clientX-rect.left, py=clientY-rect.top;
     try{wheelLL=map.unproject([px,py]);}catch(_){return;}
     w.innerHTML='';w.style.left=px+'px';w.style.top=py+'px';
-    const center=document.createElement('button');center.className='mw-center';center.innerHTML='<img alt="" src="'+svgURL(_centerSVG())+'">';   // cachet de cire NOIR = itinéraire
-    center.onclick=e=>{e.stopPropagation();if(wheelLL&&world){const m=lngLatToM(wheelLL.lng,wheelLL.lat);setRoute(m.x,m.y,'Point choisi');}closeWheel();};
-    w.appendChild(center);
-    const R=94,n=MARKER_TYPES.length;
-    MARKER_TYPES.forEach((t,i)=>{const ang=-Math.PI/2+i*2*Math.PI/n;const b=document.createElement('button');
-      b.className='mw-petal';b.innerHTML='<img alt="" src="'+svgURL(_markerSVG(MGLYPHS[t.k]))+'">';   // le VRAI marqueur (goutte de cire d'or) tel qu'il sera posé
-      b.style.left=(Math.cos(ang)*R)+'px';b.style.top=(Math.sin(ang)*R)+'px';
-      b.onclick=e=>{e.stopPropagation();if(wheelLL)placeMarker(t.k,wheelLL.lng,wheelLL.lat);closeWheel();};
-      w.appendChild(b);});
+    const n=MARKER_TYPES.length, step=2*Math.PI/n;
+    const disc=document.createElement('div');disc.className='mw-disc';
+    const img=document.createElement('img');img.alt='';img.src=svgURL(_wheelSVG(MARKER_TYPES.map(t=>t.k)));
+    disc.appendChild(img);w.appendChild(disc);
+    // clic : rayon → centre (itinéraire) ou quartier ; angle → quel marqueur. Insensible au nb de quartiers.
+    disc.addEventListener('click',e=>{e.stopPropagation();
+      const r=img.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+      const dx=e.clientX-cx,dy=e.clientY-cy,distU=Math.hypot(dx,dy)*(WHEEL_VB/r.width);
+      if(distU>WHEEL_ROUT+10){closeWheel();return;}                                   // hors du cachet → ferme
+      if(distU<WHEEL_RIN){if(wheelLL&&world){const m=lngLatToM(wheelLL.lng,wheelLL.lat);setRoute(m.x,m.y,'Point choisi');}closeWheel();return;} // centre = itinéraire
+      let idx=Math.round((Math.atan2(dy,dx)+Math.PI/2)/step);idx=((idx%n)+n)%n;        // quartier le plus proche
+      if(wheelLL)placeMarker(MARKER_TYPES[idx].k,wheelLL.lng,wheelLL.lat);closeWheel();});
     w.classList.add('open');suppressClick=true;
     setTimeout(()=>document.addEventListener('pointerdown',wheelOutside,{once:true}),0);
   }
@@ -1119,7 +1118,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=60;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=61;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1492,6 +1491,29 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       +'<g filter="url(#we)"><circle r="9.5" fill="#2b2724"/></g>'
       +'<circle r="9.5" fill="url(#ws)"/>'
       +'<path d="'+MROUTE+'" transform="translate(-10.2 -10.2) scale(0.85)" fill="#f7ecd4" stroke="#f7ecd4" stroke-width="0.6" stroke-linejoin="round"/></svg>';}
+  // ROUE DES MARQUEURS = UN SEUL CACHET DE CIRE segmenté. types = liste des clés d'empreintes ; le nb de quartiers s'adapte
+  // (pour rajouter des marqueurs plus tard, il suffit d'ajouter à MARKER_TYPES). Les empreintes sont dimensionnées pour NE PAS déborder.
+  const WHEEL_ROUT=100, WHEEL_RIN=38, WHEEL_VB=220;   // rayon disque / rayon centre / viewBox (unités)
+  function _wheelSVG(types){
+    var N=types.length, Ro=WHEEL_ROUT, Ri=WHEEL_RIN, Rg=(Ri+Ro)/2+3, step=2*Math.PI/N;
+    var gs=Math.min(Ro-Ri, Rg*step)/25;   // échelle empreinte : tient dans le quartier (radial ET angulaire) → ne dépasse pas
+    var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="-110 -110 '+WHEEL_VB+' '+WHEEL_VB+'" width="'+WHEEL_VB+'" height="'+WHEEL_VB+'"><defs>'+FABLE_DEFS
+      +'<filter id="wb" x="-15%" y="-15%" width="130%" height="130%"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="9" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="7"/></filter></defs>';
+    s+='<circle cx="1.2" cy="1.4" r="'+(Ro+1)+'" fill="#6f4c0d"/>';                              // épaisseur
+    s+='<g filter="url(#wb)"><circle r="'+Ro+'" fill="#B08427"/></g>';                           // cire OR + bord irrégulier
+    s+='<circle r="'+Ro+'" fill="url(#wo)"/>';                                                   // modelé or
+    s+='<circle r="'+(Ro-5)+'" fill="none" stroke="#fbf3dd" stroke-width="1.8" stroke-opacity="0.65"/>'; // filet crème extérieur
+    for(var i=0;i<N;i++){var ba=-Math.PI/2+(i+0.5)*step;                                         // séparateurs en rayons
+      s+='<line x1="'+(Math.cos(ba)*Ri).toFixed(1)+'" y1="'+(Math.sin(ba)*Ri).toFixed(1)+'" x2="'+(Math.cos(ba)*(Ro-4)).toFixed(1)+'" y2="'+(Math.sin(ba)*(Ro-4)).toFixed(1)+'" stroke="#fbf3dd" stroke-width="1.9" stroke-opacity="0.6" stroke-linecap="round"/>';}
+    for(var j=0;j<N;j++){var a=-Math.PI/2+j*step, gx=Math.cos(a)*Rg, gy=Math.sin(a)*Rg, g=MGLYPHS[types[j]]||MGLYPHS.drapeau;  // 1 empreinte / quartier
+      s+='<path d="'+g+'" transform="translate('+gx.toFixed(1)+' '+gy.toFixed(1)+') scale('+gs.toFixed(3)+') translate(-12 -12)" fill="none" stroke="#fdf6e3" stroke-width="'+(2.4/gs).toFixed(2)+'" stroke-linecap="round" stroke-linejoin="round"/>';}
+    s+='<circle cx="0.8" cy="1" r="'+(Ri+1)+'" fill="#000"/>';                                    // centre : cachet de cire NOIR
+    s+='<g filter="url(#we)"><circle r="'+Ri+'" fill="#2b2724"/></g>';
+    s+='<circle r="'+Ri+'" fill="url(#ws)"/>';
+    s+='<circle r="'+(Ri-3)+'" fill="none" stroke="#f7ecd4" stroke-width="1.2" stroke-opacity="0.45"/>';
+    var rs=Ri*0.062;
+    s+='<path d="'+MROUTE+'" transform="scale('+rs.toFixed(3)+') translate(-12 -12)" fill="#f7ecd4" stroke="#f7ecd4" stroke-width="0.6" stroke-linejoin="round"/>';  // flèche itinéraire
+    return s+'</svg>';}
   function svgURL(svg){return 'data:image/svg+xml,'+encodeURIComponent(svg);}
   const _imgCache=new Map();
   function _cachedImg(key,svg){var e=_imgCache.get(key);if(e)return e.ready?e.img:null;
