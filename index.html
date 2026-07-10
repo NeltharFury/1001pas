@@ -575,7 +575,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const out=[];for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)out.push(buildRegion(i,j));return {list:out,grid:true};}
   function initWorld(C){REGION_CACHE.clear();bgGen++;   // nouveau monde → tout replay différé encore en vol devient caduc
     world={C:{lng:C[0],lat:C[1]},lngM:111320*Math.cos(C[1]*Math.PI/180),places:[],commune:null,pois:[],poiByCell:new Map(),knownPOIs:0,_poiById:new Map(),_poiByName:new Map(),_placeKeys:new Set(),
-      communes:[],_commIds:new Set(),_commChunks:new Set(),_zoneById:new Map(),water:[]};}
+      communes:[],_commIds:new Set(),_commChunks:new Set(),_zoneById:new Map(),_zoneSitesDone:new Set(),water:[]};}
   // clé de lieu INDÉPENDANTE de la source (tuiles vectorielles OU Overpass) → fusion + déblocage stables
   function poiKey(lng,lat,name){return normStr(name)+'@'+lng.toFixed(3)+','+lat.toFixed(3);}
 
@@ -606,25 +606,33 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       const ty=osmType(tg);if(ty&&tg.name){const id='osm'+(e.type||'n')[0]+e.id;if(!seen.has(id)){seen.add(id);pois.push({id:id,lng:lo,lat:la,g:ty.key,type:ty.label,n:tg.name,src:'osm',wiki:tg.wikipedia||'',wd:tg.wikidata||'',desc:tg.description||tg.inscription||''});}}}
     return {places,pois};}
   // Overpass -> lng/lat BRUTS ; on interroge PLUSIEURS miroirs EN PARALLÈLE (le 1er qui répond gagne) → chargement rapide
-  function overpassData(center,radius,cb){
-    const lat=center[1],lngM=111320*Math.cos(lat*Math.PI/180),dLat=radius/LATM,dLng=radius/lngM;
-    const bb=(lat-dLat)+','+(center[0]-dLng)+','+(lat+dLat)+','+(center[0]+dLng);
-    const q='[out:json][timeout:20];('
+  function overpassQuery(bb){   // bb = "south,west,north,east" (lat/lng)
+    return '[out:json][timeout:25];('
       +'node["place"~"suburb|neighbourhood|quarter|borough|city_block|hamlet|locality|village|town|city"]('+bb+');'
       +'node["amenity"="fountain"]('+bb+');'
       +'node["tourism"~"viewpoint|artwork|museum|attraction"]('+bb+');'
       +'nwr["historic"~"monument|memorial|castle|ruins|archaeological_site"]('+bb+');'
       +'node["natural"="peak"]('+bb+');'
       +'node["amenity"="place_of_worship"]('+bb+');'
-      +');out center 500;';
+      +');out center 800;';
+  }
+  // Course de MIROIRS Overpass sur une bbox EXPLICITE (le 1er qui répond gagne) → cb(parseOverpass(js)) ou cb(null).
+  function overpassFetchBB(bb,cb){
+    const q=overpassQuery(bb);
     const eps=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
     osmPending++;setLoading(true);
     let done=false,fails=0;const ctrls=eps.map(()=>{try{return new AbortController();}catch(_){return null;}});
     function finish(res){if(done)return;done=true;clearTimeout(to);ctrls.forEach(c=>{if(c){try{c.abort();}catch(_){}}});osmPending=Math.max(0,osmPending-1);if(osmPending<=0)setLoading(false);cb(res);}
-    const to=setTimeout(()=>{console.warn('Overpass: délai dépassé');finish(null);},15000);
+    const to=setTimeout(()=>{console.warn('Overpass: délai dépassé');finish(null);},18000);
     eps.forEach((ep,i)=>{fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctrls[i]?ctrls[i].signal:undefined})
       .then(r=>r.ok?r.json():Promise.reject(r.status)).then(js=>{if(done)return;if(!js||!js.elements)return Promise.reject('noelem');finish(parseOverpass(js));})
       .catch(err=>{if(done)return;fails++;if(fails>=eps.length){console.warn('Overpass: tous les miroirs KO');finish(null);}});});
+  }
+  // bbox dérivée d'un CENTRE + rayon (chargement au fil de la marche, autour du joueur)
+  function overpassData(center,radius,cb){
+    const lat=center[1],lngM=111320*Math.cos(lat*Math.PI/180),dLat=radius/LATM,dLng=radius/lngM;
+    const bb=(lat-dLat)+','+(center[0]-dLng)+','+(lat+dLat)+','+(center[0]+dLng);
+    overpassFetchBB(bb,cb);
   }
   // fusionne les données OSM (tuiles vectorielles + Overpass) dans le monde (cumul en mémoire = cache d'exploration).
   // Dédup par clé géo+nom → une même chose vue par 2 sources fusionne (Overpass enrichit les tags wiki des lieux des tuiles).
@@ -680,7 +688,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const byZone=new Map();
     for(const p of world.pois){p._sel=false;const z=zoneAt(p.x,p.y);p._zone=z?z.id:null;if(z){let a=byZone.get(z.id);if(!a){a=[];byZone.set(z.id,a);}a.push(p);}}
     const byCell=new Map();let reach=0;
-    for(const z of world.communes){let arr=byZone.get(z.id);if(!arr)continue;
+    for(const z of world.communes){if(z.discovered)loadZoneSites(z);   // vivier COMPLET de la commune (déterministe) dès qu'elle est découverte
+      let arr=byZone.get(z.id);if(!arr)continue;
       arr.sort(poiSelCmp);
       let disc=0;for(const p of arr)if(state.discP.has(p.id))disc++;
       const cap=Math.max(POI_PER_CELL,disc);           // jamais rogner en dessous des sites déjà découverts
@@ -840,6 +849,30 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         if(onDone)onDone(true);}
       else if(tries<6){setTimeout(()=>loadArea(center,onDone,tries+1),2500+tries*2500);} // relance (backoff) jusqu'à réussir
       else if(onDone)onDone(false);});
+  }
+  // ---- SITES COMPLETS PAR ZONE (déterministe, identique sur tout appareil) ----
+  // Le chargement par position (loadArea, cercle de 1600 m autour du joueur) ne couvre qu'une PARTIE d'une grande commune →
+  // deux appareils à des endroits différents de la même commune obtiennent des viviers de sites DIFFÉRENTS (→ top-18 différent).
+  // Ici on charge TOUS les sites de la commune en UNE requête bornée par SA bbox (indépendante de la position), cachée par id de
+  // zone → même vivier partout → le top-18 déterministe (poiSelCmp) est enfin IDENTIQUE test↔téléphone.
+  function loadZoneSites(z){
+    if(!world||!z||!z.bb)return;
+    if(!world._zoneSitesDone)world._zoneSitesDone=new Set();
+    if(world._zoneSitesDone.has(z.id))return;
+    // bbox lng/lat ABSOLUE (l'offset world.C s'annule → identique sur tout appareil) + garde-fou taille, AVANT toute mutation d'état
+    const sw=mToLngLat(z.bb[0],z.bb[1]),ne=mToLngLat(z.bb[2],z.bb[3]);
+    const midLat=(sw[1]+ne[1])/2,spanLng=Math.abs(ne[0]-sw[0])*111320*Math.cos(midLat*Math.PI/180),spanLat=Math.abs(ne[1]-sw[1])*LATM;
+    if(!isFinite(spanLng)||!isFinite(spanLat)||Math.max(spanLng,spanLat)>14000){world._zoneSitesDone.add(z.id);return;} // démesuré/invalide → marqué « fait » (pas de retry), le chargement par position gère
+    const ck='pas1001_osm_z'+z.id;                        // même namespace que le cache OSM (géré par purgeOsmCache)
+    let cached=null;try{cached=JSON.parse(localStorage.getItem(ck)||'null');}catch(e){}
+    if(cached&&cached.pois){world._zoneSitesDone.add(z.id);setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached);},0);return;} // différé : jamais d'ingest synchrone depuis reindexPois (anti ré-entrance)
+    if((world._zoneFetching||0)>=2)return;                // throttle : au plus 2 fetch de zone en parallèle (le reste retentera au prochain reindex ; pas encore marqué « fait »)
+    world._zoneSitesDone.add(z.id);world._zoneFetching=(world._zoneFetching||0)+1;
+    const bb=sw[1]+','+sw[0]+','+ne[1]+','+ne[0];         // Overpass = south,west,north,east
+    overpassFetchBB(bb,d=>{ world._zoneFetching=Math.max(0,(world._zoneFetching||1)-1);
+      if(d){ingestOSM(d);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
+      else{world._zoneSitesDone.delete(z.id);}            // échec réseau → réessayable au prochain reindex
+    });
   }
 
   // ---- État ----
@@ -1075,7 +1108,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=27;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=28;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
