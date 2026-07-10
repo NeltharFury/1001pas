@@ -696,8 +696,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const byCell=new Map();let reach=0;
     for(const z of world.communes){let arr=byZone.get(z.id);if(!arr)continue;
       arr.sort(poiSelCmp);
-      const cap=POI_PER_CELL;                          // TOP-18 FIXE par rang (plus « découverts d'abord ») → les 18 sites sont les mêmes partout, quelle que soit ta progression
-      z.pois=arr.length>cap?arr.slice(0,cap):arr;
+      if(arr.some(p=>p.src==='osm'))arr=arr.filter(p=>p.src==='osm'); // dès qu'Overpass a chargé la commune → UNIQUEMENT ses sites (déterministes, identiques partout) ; avant ça, aperçu via les tuiles
+      z.pois=arr;                                      // PLUS DE PLAFOND : TOUS les sites remarquables de la commune sont explorables (choix Étienne) ; le dessin ne montre que ceux à l'écran (culling) → pas de surcharge
       // _sel = fait partie de la SÉLECTION plafonnée. TOUS les chemins de déblocage (marche, rétro, arrière-plan) s'y limitent
       // → « atteignable = affiché = compté » identique partout ; un site au-delà du top-18 n'est débloqué par AUCUN chemin.
       for(const p of z.pois){p._sel=true;const c=cellIndexOf(p.x,p.y),k=regionKey(c.i,c.j);let b=byCell.get(k);if(!b){b=[];byCell.set(k,b);}b.push(p);}
@@ -1119,7 +1119,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=42;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=43;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
