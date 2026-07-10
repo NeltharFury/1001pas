@@ -655,7 +655,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       world._poiById.set(key,P2);world.pois.push(P2);
       if(!world._poiByName.has(nm))world._poiByName.set(nm,[]);world._poiByName.get(nm).push(P2);
       added=true;}
-    reindexPois();refreshNames();if(added)retroUnlock();}
+    reindexPois();refreshNames();if(added){if(window.__wake)__wake(900);retroUnlock();}} // réveil : afficher les sites qui viennent d'arriver (même à l'arrêt)
   // Fusion d'un site déjà connu : enrichit les tags, et PROMEUT tuile→Overpass (coords EXACTES + source déterministe).
   // On garde l'id (clé) existant → une découverte déjà acquise (state.discP) reste valable.
   function mergePoi(ex,P,src){
@@ -911,11 +911,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const discToastNames=new Set(); // pour ne pas répéter « Zone découverte » pour un même nom
   // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Zone découverte »)
   function discoverZone(Z){if(!Z)return;loadZoneSites(Z); // vivier COMPLET de la commune où l'on entre/est (zone COURANTE uniquement → pas de rafale de fetch sur TOUTES les communes déjà découvertes)
-    if(state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true; // découvrir une contrée = 0 XP
+    if(state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true;if(window.__wake)__wake(3800); // découvrir une contrée = 0 XP ; réveil pour l'anim (brume + houppes + sceaux)
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
   function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
-  function reachPOI(P,Z,silent){state.discP.add(P.id);P.tSeal=performance.now();state.xp+=CONFIG.xp.perPOI;dirty=true;
+  function reachPOI(P,Z,silent){state.discP.add(P.id);P.tSeal=performance.now();state.xp+=CONFIG.xp.perPOI;dirty=true;if(window.__wake)__wake(1000); // réveil pour l'anim du sceau
     if(!silent)toast('poi',POI_GLYPH[P.g]||'✦','Site découvert +'+CONFIG.xp.perPOI+' XP',P.n);
     if(Z&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);const bonus=Z.pois.length*CONFIG.xp.completePerSite;state.xp+=bonus;toast('r','★','Zone complétée !',Z.name+' · +'+bonus+' XP');}
     checkAch();}
@@ -996,10 +996,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       return {poly:rt.geometry.coordinates.map(c=>{const m=lngLatToM(c[0],c[1]);return {x:m.x,y:m.y};}),dist:rt.distance};});}
   // (re)calcule le tracé DEPUIS la position courante → il se réajuste comme Google Maps, la portion faite disparaît
   function doRouteFetch(){if(!route)return;route.ffx=state.pl.x;route.ffy=state.pl.y;const my=++routeReq;
-    fetchRoute(route.x,route.y).then(r=>{if(my===routeReq&&route){route.poly=r.poly;route.dist=r.dist;}}).catch(()=>{/* repli : ligne directe */});}
+    fetchRoute(route.x,route.y).then(r=>{if(my===routeReq&&route){route.poly=r.poly;route.dist=r.dist;if(window.__wake)__wake(700);}}).catch(()=>{/* repli : ligne directe */});}
   function setRoute(x,y,name){route={x:x,y:y,name:name,poly:null,dist:null,_remain:null,ffx:state.pl.x,ffy:state.pl.y};
-    rbName.textContent=name;routeBar.classList.add('show');document.body.classList.add('routing');toast('r','◈','Itinéraire tracé',name);doRouteFetch();}
-  function clearRoute(){routeReq++;route=null;routeBar.classList.remove('show');document.body.classList.remove('routing');}
+    rbName.textContent=name;routeBar.classList.add('show');document.body.classList.add('routing');toast('r','◈','Itinéraire tracé',name);doRouteFetch();if(window.__wake)__wake(900);}
+  function clearRoute(){routeReq++;route=null;routeBar.classList.remove('show');document.body.classList.remove('routing');if(window.__wake)__wake(700);}
   document.getElementById('rbClear').onclick=clearRoute;
 
   // ═══ REPÈRES / MARQUEURS de l'utilisateur : clic long → ROUE (pétales de types autour + ITINÉRAIRE au centre) ═══
@@ -1044,7 +1044,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   }
   function wheelOutside(e){const w=wheelEl();if(w&&!w.contains(e.target))closeWheel();}
   function closeWheel(){const w=wheelEl();if(w){w.classList.remove('open');w.innerHTML='';}wheelLL=null;}
-  function placeMarker(type,lng,lat){markers.push({id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4),lng:lng,lat:lat,type:type,ts:Date.now()});saveMarkers();toast('r','✦','Repère posé',MARKER_LABEL[type]||'Repère');}
+  function placeMarker(type,lng,lat){markers.push({id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4),lng:lng,lat:lat,type:type,ts:Date.now()});saveMarkers();toast('r','✦','Repère posé',MARKER_LABEL[type]||'Repère');if(window.__wake)__wake(900);}
   // repère = MÊME STYLE que les sites (sceau de cire) mais en AZUR → reconnaissable comme repère perso
   function drawMarkerSeal(x,y,glyph,ph){var g=fctx,r=10.5;g.save();
     g.fillStyle='rgba(20,40,70,0.30)';g.beginPath();g.ellipse(x+0.5,y+r*1.1,r*0.66,r*0.22,0,0,TAU);g.fill();  // ombre au sol
@@ -1108,7 +1108,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=29;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=30;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1617,11 +1617,18 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   }
 
   // ---- Boucle ----
-  let last=performance.now();
-  // La boucle rAF fait AVANCER le jeu (déplacement, suivi, HUD) et RÉCLAME un rendu carte ; le DESSIN du calque
-  // se fait dans map.on('render') → projeté avec la transformée EXACTE de l'image affichée = plus de « nage » au zoom.
+  let last=performance.now(), renderUntil=0, lastHud=0;
+  // RENDU À LA DEMANDE : on garde une « fenêtre de rendu » (renderUntil) rafraîchie par les événements qui animent
+  // (déplacement, interaction carte, découverte, sceau…). wake(ms) prolonge cette fenêtre. Hors fenêtre → le GPU DORT.
+  function wake(ms){const u=performance.now()+(ms||800);if(u>renderUntil)renderUntil=u;}
+  window.__wake=wake;   // accessible aux autres modules (repères, itinéraire…)
+  // La boucle rAF fait AVANCER le jeu (déplacement, suivi, HUD) et NE RÉCLAME un rendu carte QUE si quelque chose s'anime
+  // (avant : map.triggerRepaint() à CHAQUE frame → carte re-rendue 60 fps en continu même à l'arrêt → téléphone bouillant).
   function frame(t){const dt=Math.min(0.05,(t-last)/1000);last=t;
-    if(ready&&world){const moved=update(dt);if(moved&&follow)map.setCenter(playerLngLat());updateHUD();map.triggerRepaint();}
+    if(ready&&world){const moved=update(dt);if(moved){wake(600);if(follow)map.setCenter(playerLngLat());}
+      const active=t<renderUntil||progPanel.classList.contains('open')||(control.joy&&control.joy.active); // qqch à animer ?
+      if(active){updateHUD();map.triggerRepaint();lastHud=t;}      // GPU actif seulement quand utile
+      else if(t-lastHud>500){updateHUD();lastHud=t;}}              // sinon petit battement HUD (compteur de pas) sans réveiller le GPU
     requestAnimationFrame(frame);}
 
   // ---- VRAI GPS (version distribuable) : la position réelle du téléphone pilote l'avatar ----
@@ -1636,11 +1643,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       if(!bootHadSave){ setLocation(lng,lat); } // NOUVEAU joueur → on FONDE le monde À sa position réelle (carte propre, aucune contrée fantôme du centre par défaut)
       else{ const m=lngLatToM(lng,lat); state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show'); // joueur EXISTANT → on garde la progression, on se place juste dessus
             map.setCenter([lng,lat]);map.setZoom(Math.max(map.getZoom(),CONFIG.defaultZoom));revealStart();maybeFetchArea(); }
-      dirty=true;afterMove();save();toast('r','◈','Position acquise','Le GPS te suit maintenant');gpsChip(gpsLabel(acc),true);return;
+      dirty=true;afterMove();save();if(window.__wake)__wake(2600);toast('r','◈','Position acquise','Le GPS te suit maintenant');gpsChip(gpsLabel(acc),true);return;
     }
     const m=lngLatToM(lng,lat), step=Math.hypot(m.x-state.pl.x,m.y-state.pl.y);
     state.pl.x=m.x;state.pl.y=m.y;
     if(!NATIVE && step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // web : distance estimée du GPS. En natif : les pas viennent du podomètre (le GPS ne sert qu'à la position)
+    if(step>=CONFIG.gps.minStep&&window.__wake)__wake(900); // réveil du rendu SEULEMENT sur vrai déplacement (pas le jitter GPS à l'arrêt → le GPU dort quand on ne bouge pas)
     dirty=true;afterMove();if(follow)map.setCenter(playerLngLat());
     gpsChip(gpsLabel(acc), acc>40 || state.dist<25); // reste affiché si précision faible ; sinon se cache après 25 m parcourus
   }
@@ -1665,7 +1673,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   let pedLastTotal=(function(){try{var v=localStorage.getItem(PED_TOTAL_KEY);return v==null?null:parseFloat(v);}catch(_){return null;}})();
   let pedPending=0, pedFirstCredit=true;                      // pas en attente si la carte n'est pas prête ; 1er crédit = lot « rattrapé »
   function pedSaveTotal(t){try{localStorage.setItem(PED_TOTAL_KEY,String(t));}catch(_){}}
-  function pedFlush(){ if(pedPending>0&&world&&ready){ state.dist+=pedPending*0.75; pedPending=0; dirty=true; afterMove(); } } // 1 pas = 0,75 m → distance + XP
+  function pedFlush(){ if(pedPending>0&&world&&ready){ state.dist+=pedPending*0.75; pedPending=0; dirty=true; afterMove(); if(window.__wake)__wake(900); } } // 1 pas = 0,75 m → distance + XP
   function pedCredit(total){                                  // total = pas cumulés depuis le boot
     if(pedLastTotal==null){ pedLastTotal=total; pedSaveTotal(total); return; }   // 1re fois : on ancre, rien à créditer
     if(total<pedLastTotal){ pedLastTotal=total; pedSaveTotal(total); return; }   // téléphone redémarré (compteur remis à 0) → on réancre sans créditer
@@ -1751,6 +1759,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   let harvestT=0;
   function harvestSoon(){const n=performance.now();if(n-harvestT<600)return;harvestT=n;harvestTiles();}
   map.on('idle',harvestSoon);map.on('moveend',harvestSoon);map.on('sourcedata',e=>{if(e.sourceId==='omt'&&e.isSourceLoaded)harvestSoon();});
+  // RÉVEIL du rendu sur toute interaction/animation carte (pan, zoom, flyTo, setCenter…) + tout contact tactile/souris → le calque suit.
+  map.on('move',()=>wake(500));map.on('zoom',()=>wake(500));
+  try{map.getContainer().addEventListener('pointerdown',()=>wake(1600),{passive:true});}catch(_){}
   // DESSIN du calque calé sur le rendu de la carte (transformée de l'image en cours) → le brouillard/les frontières ne « nagent » plus au zoom/pan
   map.on('render',()=>{if(ready&&world)drawOverlay(performance.now());});
   // ---- Boot ----
@@ -1766,7 +1777,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     initWorld(C);
     if(saved)applySaved(saved);
     map.setCenter(playerLngLat());map.setZoom(CONFIG.defaultZoom);
-    ready=true;
+    ready=true;wake(2500);               // premier rendu + révélation initiale
     revealStart();                       // dévoile la contrée de départ (fix « je vois plus rien »)
     harvestTiles();                      // lieux immédiats depuis les tuiles déjà chargées
     loadArea(C,ok=>{if(ok){lastFetch={x:state.pl.x,y:state.pl.y};save();}}); // Overpass = enrichissement (fontaines, tags wiki…)
