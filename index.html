@@ -1119,7 +1119,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=55;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=56;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1676,13 +1676,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       pill(midx,midy,'≈ '+routePas().toLocaleString('fr-FR')+' PAS');}
     // cible de marche
     if(control.target){const c=proj(control.target.x,control.target.y),pu=noMotion?0:2*Math.sin(t*0.006);fctx.strokeStyle='rgba(120,84,40,.6)';fctx.lineWidth=1.5;fctx.beginPath();fctx.arc(c.x,c.y,9+pu,0,TAU);fctx.stroke();}
-    // emblème du joueur : halo carmin pulsant (repérage) + sceau de cire OR à silhouette
-    if(z<4)blob(PS.x,PS.y,110,'232,185,60',0.32); // vue planète : clairière d'or sur « vos terres »
-    {const pul=noMotion?0.5:0.5+0.5*Math.sin(t*TAU/3200),hr=34*(1+0.3*pul);
-     const hg=fctx.createRadialGradient(PS.x,PS.y,0,PS.x,PS.y,hr);
-     hg.addColorStop(0,'rgba(164,36,59,'+(0.5-0.32*pul)+')');hg.addColorStop(0.7,'rgba(164,36,59,'+(0.15-0.09*pul)+')');hg.addColorStop(1,'rgba(164,36,59,0)');
-     fctx.fillStyle=hg;fctx.beginPath();fctx.arc(PS.x,PS.y,hr,0,TAU);fctx.fill();
-     drawPlayerEmblem(PS.x,PS.y,21);}
+    // emblème du joueur : sceau de cire OR à silhouette (halo de lumière retiré, demande Étienne)
+    if(z<4)blob(PS.x,PS.y,110,'232,185,60',0.32); // vue planète : clairière d'or sur « vos terres » (repérage au dézoom extrême)
+    drawPlayerEmblem(PS.x,PS.y,21);
     // infobulle « marche jusqu'à ce lieu »
     if(tip){if(now>tip.until)tip=null;else{const tp=proj(tip.x,tip.y),msg='Marche jusqu\'à ce site pour le découvrir';
       fctx.font='italic 11px '+FONT_SERIF;const tw2=fctx.measureText(msg).width;
