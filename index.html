@@ -625,7 +625,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     function finish(res){if(done)return;done=true;clearTimeout(to);ctrls.forEach(c=>{if(c){try{c.abort();}catch(_){}}});osmPending=Math.max(0,osmPending-1);if(osmPending<=0)setLoading(false);cb(res);}
     const to=setTimeout(()=>{console.warn('Overpass: délai dépassé');finish(null);},35000); // 35 s : mesuré, 2 miroirs sur 3 mettent ~31 s pour la requête « toute la commune ». Course de miroirs → le rapide (~2 s) gagne quand dispo ; ce délai ne sert qu'au repli.
     eps.forEach((ep,i)=>{fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctrls[i]?ctrls[i].signal:undefined})
-      .then(r=>r.ok?r.json():Promise.reject(r.status)).then(js=>{if(done)return;if(!js||!js.elements)return Promise.reject('noelem');finish(parseOverpass(js));})
+      .then(r=>r.ok?r.json():Promise.reject(r.status)).then(js=>{if(done)return;if(!js||!js.elements)return Promise.reject('noelem');
+        if(js.remark&&/timed?\s*out|timeout|runtime error/i.test(js.remark))return Promise.reject('partial'); // réponse TRONQUÉE (miroir a dépassé son propre timeout) → traiter comme un échec de CE miroir (jamais mise en cache), laisser les autres finir
+        finish(parseOverpass(js));})
       .catch(err=>{if(done)return;fails++;if(fails>=eps.length){console.warn('Overpass: tous les miroirs KO');finish(null);}});});
   }
   // bbox dérivée d'un CENTRE + rayon (chargement au fil de la marche, autour du joueur)
@@ -862,7 +864,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const sw=mToLngLat(z.bb[0],z.bb[1]),ne=mToLngLat(z.bb[2],z.bb[3]);
     const midLat=(sw[1]+ne[1])/2,spanLng=Math.abs(ne[0]-sw[0])*111320*Math.cos(midLat*Math.PI/180),spanLat=Math.abs(ne[1]-sw[1])*LATM;
     if(!isFinite(spanLng)||!isFinite(spanLat)||Math.max(spanLng,spanLat)>14000){world._zoneSitesDone.add(z.id);return;} // démesuré/invalide → marqué « fait » (pas de retry), le chargement par position gère
-    const ck='pas1001_osm_z'+z.id;                        // même namespace que le cache OSM (géré par purgeOsmCache)
+    const ck='pas1001_osm_z2_'+z.id;                      // v2 : invalide les caches de zone d'avant (qui pouvaient contenir un vivier PARTIEL tronqué). Même namespace 'pas1001_osm_' → purgeOsmCache gère.
     let cached=null;try{cached=JSON.parse(localStorage.getItem(ck)||'null');}catch(e){}
     if(cached&&cached.pois){world._zoneSitesDone.add(z.id);setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached);},0);return;} // différé : jamais d'ingest synchrone depuis reindexPois (anti ré-entrance)
     if((world._zoneFetching||0)>=2){zoneRetry(z,1500);return;}   // throttle : au plus 2 fetch // → on REPROGRAMME (ne dépend plus d'un futur reindex)
@@ -1111,7 +1113,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=32;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=33;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
