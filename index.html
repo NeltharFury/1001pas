@@ -1113,7 +1113,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=33;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=34;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1623,7 +1623,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   }
 
   // ---- Boucle ----
-  let last=performance.now(), renderUntil=0, lastHud=0;
+  let last=performance.now(), renderUntil=0, lastHud=0, lastRender=0;
   // RENDU À LA DEMANDE : on garde une « fenêtre de rendu » (renderUntil) rafraîchie par les événements qui animent
   // (déplacement, interaction carte, découverte, sceau…). wake(ms) prolonge cette fenêtre. Hors fenêtre → le GPU DORT.
   function wake(ms){const u=performance.now()+(ms||800);if(u>renderUntil)renderUntil=u;}
@@ -1633,8 +1633,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function frame(t){const dt=Math.min(0.05,(t-last)/1000);last=t;
     if(ready&&world){const moved=update(dt);if(moved){wake(600);if(follow)map.setCenter(playerLngLat());}
       const active=t<renderUntil||progPanel.classList.contains('open')||(control.joy&&control.joy.active); // qqch à animer ?
-      if(active){updateHUD();map.triggerRepaint();lastHud=t;}      // GPU actif seulement quand utile
-      else if(t-lastHud>500){updateHUD();lastHud=t;}}              // sinon petit battement HUD (compteur de pas) sans réveiller le GPU
+      if(active&&t-lastRender>=33){updateHUD();map.triggerRepaint();lastRender=t;lastHud=t;} // GPU actif seulement quand utile, PLAFONNÉ à ~30 fps (moitié moins de charge qu'à 60)
+      else if(!active&&t-lastHud>500){updateHUD();lastHud=t;}}      // à l'arrêt : petit battement HUD (compteur de pas) sans réveiller le GPU
     requestAnimationFrame(frame);}
 
   // ---- VRAI GPS (version distribuable) : la position réelle du téléphone pilote l'avatar ----
@@ -1654,8 +1654,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const m=lngLatToM(lng,lat), step=Math.hypot(m.x-state.pl.x,m.y-state.pl.y);
     state.pl.x=m.x;state.pl.y=m.y;
     if(!NATIVE && step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // web : distance estimée du GPS. En natif : les pas viennent du podomètre (le GPS ne sert qu'à la position)
-    if(step>=CONFIG.gps.minStep&&window.__wake)__wake(900); // réveil du rendu SEULEMENT sur vrai déplacement (pas le jitter GPS à l'arrêt → le GPU dort quand on ne bouge pas)
-    dirty=true;afterMove();if(follow)map.setCenter(playerLngLat());
+    dirty=true;afterMove();
+    if(step>=CONFIG.gps.minStep){if(follow)map.setCenter(playerLngLat());if(window.__wake)__wake(900);} // vrai déplacement SEULEMENT → recentre + réveille le rendu. Le micro-tremblement GPS à l'arrêt ne recentre plus et ne réveille plus → fini la chauffe immobile (avant : setCenter à chaque relevé → move → réveil ~1×/s).
     gpsChip(gpsLabel(acc), acc>40 || state.dist<25); // reste affiché si précision faible ; sinon se cache après 25 m parcourus
   }
   function onGeoErr(err){clearTimeout(geoWatchdog);
