@@ -638,7 +638,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   }
   // fusionne les données OSM (tuiles vectorielles + Overpass) dans le monde (cumul en mémoire = cache d'exploration).
   // Dédup par clé géo+nom → une même chose vue par 2 sources fusionne (Overpass enrichit les tags wiki des lieux des tuiles).
-  function ingestOSM(d){if(!d||!world)return;const toMx=lng=>(lng-world.C.lng)*world.lngM,toMy=lat=>(lat-world.C.lat)*LATM;
+  // forZone (optionnel) = id de la commune pour laquelle ce lot a été chargé (loadZoneSites) → on RATTACHE ces sites à CETTE commune
+  // (au lieu de recalculer via le contour, qui peut différer d'un appareil à l'autre) → même vivier de commune partout.
+  function ingestOSM(d,forZone){if(!d||!world)return;const toMx=lng=>(lng-world.C.lng)*world.lngM,toMy=lat=>(lat-world.C.lat)*LATM;
     for(const p of (d.places||[])){const k=p.t+'|'+p.name+'|'+p.lng.toFixed(4);if(world._placeKeys.has(k))continue;world._placeKeys.add(k);world.places.push({x:toMx(p.lng),y:toMy(p.lat),name:p.name,t:p.t});}
     if(!world.commune)world.commune=computeCommune(world.places);
     let added=false;
@@ -647,13 +649,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const _pois=(d.pois||[]).slice().sort((a,b)=>{const ia=poiIdent(a),ib=poiIdent(b);return ia<ib?-1:ia>ib?1:0;});
     for(const P of _pois){const key=poiKey(P.lng,P.lat,P.n);const src=P.src||'tile';const px=toMx(P.lng),py=toMy(P.lat);
       const ex=world._poiById.get(key);
-      if(ex){mergePoi(ex,P,src);continue;}
+      if(ex){mergePoi(ex,P,src);if(forZone)ex._fz=forZone;continue;}
       // Dédup secondaire : MÊME nom à faible distance = MÊME site. Les tuiles quantifient les coordonnées → clé (arrondie ~100 m)
       // parfois différente de celle d'Overpass pour un site identique → sans ça, doublons + comptes qui divergent test↔téléphone.
       const nm=normStr(P.n);let dup=null;const lst=world._poiByName.get(nm);
       if(lst)for(const e of lst){if(Math.hypot(e.x-px,e.y-py)<CONFIG.poi.dedup){dup=e;break;}}
-      if(dup){mergePoi(dup,P,src);continue;}
-      const P2={id:key,x:px,y:py,lng:P.lng,lat:P.lat,g:P.g,n:P.n,type:P.type,src:src,wiki:P.wiki||'',wd:P.wd||'',desc:P.desc||''};
+      if(dup){mergePoi(dup,P,src);if(forZone)dup._fz=forZone;continue;}
+      const P2={id:key,x:px,y:py,lng:P.lng,lat:P.lat,g:P.g,n:P.n,type:P.type,src:src,_fz:forZone||null,wiki:P.wiki||'',wd:P.wd||'',desc:P.desc||''};
       world._poiById.set(key,P2);world.pois.push(P2);
       if(!world._poiByName.has(nm))world._poiByName.set(nm,[]);world._poiByName.get(nm).push(P2);
       added=true;}
@@ -688,7 +690,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function reindexPois(){
     for(const z of world.communes)z.pois=[];
     const byZone=new Map();
-    for(const p of world.pois){p._sel=false;const z=zoneAt(p.x,p.y);p._zone=z?z.id:null;if(z){let a=byZone.get(z.id);if(!a){a=[];byZone.set(z.id,a);}a.push(p);}}
+    for(const p of world.pois){p._sel=false;
+      // RATTACHEMENT : d'abord la commune pour laquelle le site a été chargé (_fz, déterministe = même vivier partout) ; sinon le contour (zoneAt)
+      let zid=(p._fz&&world._zoneById.has(p._fz))?p._fz:null; if(zid==null){const z=zoneAt(p.x,p.y);zid=z?z.id:null;}
+      p._zone=zid; if(zid){let a=byZone.get(zid);if(!a){a=[];byZone.set(zid,a);}a.push(p);}}
     const byCell=new Map();let reach=0;
     for(const z of world.communes){let arr=byZone.get(z.id);if(!arr)continue;
       arr.sort(poiSelCmp);
@@ -869,12 +874,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!isFinite(spanLng)||!isFinite(spanLat)||Math.max(spanLng,spanLat)>14000){world._zsDone.add(z.id);return;} // démesuré/invalide → done, le chargement par position gère
     const ck='pas1001_osm_z3_'+z.id;                      // v3 (invalide les caches partiels/tronqués d'avant, dont le « 67 » figé) ; namespace 'pas1001_osm_' → purgeOsmCache gère
     let cached=null;try{cached=JSON.parse(localStorage.getItem(ck)||'null');}catch(e){}
-    if(cached&&cached.pois&&cached.pois.length){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=cached.pois.length;setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached);},0);return;} // ingest différé (anti ré-entrance depuis reindexPois)
+    if(cached&&cached.pois&&cached.pois.length){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=cached.pois.length;setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached,z.id);},0);return;} // ingest différé (anti ré-entrance depuis reindexPois) ; forZone=z.id → rattachement déterministe
     if(world._zsBusy.size>=2){zoneRetry(z,1500);return;} // throttle : au plus 2 fetch // → relance PAR TIMER (jamais par le mouvement)
     world._zsBusy.add(z.id);
     const bb=sw[1]+','+sw[0]+','+ne[1]+','+ne[0];         // Overpass = south,west,north,east
     overpassFetchBB(bb,d=>{ world._zsBusy.delete(z.id);
-      if(d){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=(d.pois?d.pois.length:0);ingestOSM(d);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
+      if(d){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=(d.pois?d.pois.length:0);ingestOSM(d,z.id);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
       else{z._zsTry=(z._zsTry||0)+1;if(z._zsTry<=12)zoneRetry(z,Math.min(60000,4000+z._zsTry*5000));else world._zsDone.add(z.id);} // ÉCHEC → retry borné (12×, backoff jusqu'à 60s ≈ 8 min) : si Overpass est momentanément down, ça se répare TOUT SEUL à son retour ; après 12 → abandon session (repli vivier par position ; re-tenté au prochain chargement)
     });
   }
@@ -1116,7 +1121,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=39;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=40;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
