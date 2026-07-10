@@ -1119,7 +1119,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=56;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=57;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1319,7 +1319,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     poiName.textContent=P.n;poiType.textContent=(P.type||'Site')+' · '+R.name;
     poiRouteBtn.disabled=false;poiSrc.classList.add('hidden');   // itinéraire possible même vers un site verrouillé (pour aller le découvrir)
     const my=++poiReq;
-    if(!unlocked){poiBody.innerHTML='<span class="pp-lock">Site encore dans la brume — marche jusqu\'à lui pour le découvrir et lire sa fiche.</span>';return;}
+    if(!unlocked){var _tl=siteTier(P),_lbl=_tl==='major'?'majeur':_tl==='notable'?'notable':'mineur';
+      poiBody.innerHTML='<span class="pp-lock">Découvre ce site '+_lbl+' pour gagner '+tierXP(P)+' points d\'expérience et lire sa fiche.</span>';return;}
     poiBody.textContent='Chargement de la fiche…';
     poiStory(P).then(r=>{if(my===poiReq)showStory(r);}).catch(()=>{if(my===poiReq)showStory(fallbackStory(P,R));});}
   const welcome=document.getElementById('welcome');
