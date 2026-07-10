@@ -575,7 +575,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const out=[];for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)out.push(buildRegion(i,j));return {list:out,grid:true};}
   function initWorld(C){REGION_CACHE.clear();bgGen++;   // nouveau monde → tout replay différé encore en vol devient caduc
     world={C:{lng:C[0],lat:C[1]},lngM:111320*Math.cos(C[1]*Math.PI/180),places:[],commune:null,pois:[],poiByCell:new Map(),knownPOIs:0,_poiById:new Map(),_poiByName:new Map(),_placeKeys:new Set(),
-      communes:[],_commIds:new Set(),_commChunks:new Set(),_zoneById:new Map(),_zoneSitesDone:new Set(),water:[]};}
+      communes:[],_commIds:new Set(),_commChunks:new Set(),_zoneById:new Map(),_zsDone:new Set(),_zsBusy:new Set(),water:[]};}
   // clé de lieu INDÉPENDANTE de la source (tuiles vectorielles OU Overpass) → fusion + déblocage stables
   function poiKey(lng,lat,name){return normStr(name)+'@'+lng.toFixed(3)+','+lat.toFixed(3);}
 
@@ -856,28 +856,31 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // deux appareils à des endroits différents de la même commune obtiennent des viviers de sites DIFFÉRENTS (→ top-18 différent).
   // Ici on charge TOUS les sites de la commune en UNE requête bornée par SA bbox (indépendante de la position), cachée par id de
   // zone → même vivier partout → le top-18 déterministe (poiSelCmp) est enfin IDENTIQUE test↔téléphone.
+  // Machine à états SANS BOUCLE : _zsDone = fetch RÉUSSI ou ABANDONNÉ (6 échecs) → on ne retente plus (cette session) ;
+  // _zsBusy = fetch EN COURS. Le déplacement (discoverZone) ne peut PLUS relancer un fetch en cours ou fini → fini le martèlement
+  // d'Overpass. Les seules relances viennent d'un TIMER borné (zoneRetry), jamais du mouvement.
   function loadZoneSites(z){
     if(!world||!z||!z.bb)return;
-    if(!world._zoneSitesDone)world._zoneSitesDone=new Set();
-    if(world._zoneSitesDone.has(z.id))return;
-    // bbox lng/lat ABSOLUE (l'offset world.C s'annule → identique sur tout appareil) + garde-fou taille, AVANT toute mutation d'état
-    const sw=mToLngLat(z.bb[0],z.bb[1]),ne=mToLngLat(z.bb[2],z.bb[3]);
+    if(!world._zsDone)world._zsDone=new Set();
+    if(!world._zsBusy)world._zsBusy=new Set();
+    if(world._zsDone.has(z.id)||world._zsBusy.has(z.id))return;
+    const sw=mToLngLat(z.bb[0],z.bb[1]),ne=mToLngLat(z.bb[2],z.bb[3]); // bbox lng/lat ABSOLUE (l'offset world.C s'annule → identique partout)
     const midLat=(sw[1]+ne[1])/2,spanLng=Math.abs(ne[0]-sw[0])*111320*Math.cos(midLat*Math.PI/180),spanLat=Math.abs(ne[1]-sw[1])*LATM;
-    if(!isFinite(spanLng)||!isFinite(spanLat)||Math.max(spanLng,spanLat)>14000){world._zoneSitesDone.add(z.id);return;} // démesuré/invalide → marqué « fait » (pas de retry), le chargement par position gère
-    const ck='pas1001_osm_z2_'+z.id;                      // v2 : invalide les caches de zone d'avant (qui pouvaient contenir un vivier PARTIEL tronqué). Même namespace 'pas1001_osm_' → purgeOsmCache gère.
+    if(!isFinite(spanLng)||!isFinite(spanLat)||Math.max(spanLng,spanLat)>14000){world._zsDone.add(z.id);return;} // démesuré/invalide → done, le chargement par position gère
+    const ck='pas1001_osm_z2_'+z.id;                      // v2 (invalide les caches partiels d'avant) ; namespace 'pas1001_osm_' → purgeOsmCache gère
     let cached=null;try{cached=JSON.parse(localStorage.getItem(ck)||'null');}catch(e){}
-    if(cached&&cached.pois){world._zoneSitesDone.add(z.id);setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached);},0);return;} // différé : jamais d'ingest synchrone depuis reindexPois (anti ré-entrance)
-    if((world._zoneFetching||0)>=2){zoneRetry(z,1500);return;}   // throttle : au plus 2 fetch // → on REPROGRAMME (ne dépend plus d'un futur reindex)
-    world._zoneSitesDone.add(z.id);world._zoneFetching=(world._zoneFetching||0)+1;
+    if(cached&&cached.pois&&cached.pois.length){world._zsDone.add(z.id);setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached);},0);return;} // ingest différé (anti ré-entrance depuis reindexPois)
+    if(world._zsBusy.size>=2){zoneRetry(z,1500);return;} // throttle : au plus 2 fetch // → relance PAR TIMER (jamais par le mouvement)
+    world._zsBusy.add(z.id);
     const bb=sw[1]+','+sw[0]+','+ne[1]+','+ne[0];         // Overpass = south,west,north,east
-    overpassFetchBB(bb,d=>{ world._zoneFetching=Math.max(0,(world._zoneFetching||1)-1);
-      if(d){ingestOSM(d);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
-      else{world._zoneSitesDone.delete(z.id);z._zsTry=(z._zsTry||0)+1;if(z._zsTry<6)zoneRetry(z,3000+z._zsTry*2500);} // ÉCHEC Overpass → RELANCE à backoff (jusqu'à 6×), même à l'arrêt (Overpass 504 souvent)
+    overpassFetchBB(bb,d=>{ world._zsBusy.delete(z.id);
+      if(d){world._zsDone.add(z.id);ingestOSM(d);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
+      else{z._zsTry=(z._zsTry||0)+1;if(z._zsTry<6)zoneRetry(z,3000+z._zsTry*3000);else world._zsDone.add(z.id);} // ÉCHEC → retry borné par timer ; après 6 → DONE (stop net, plus de boucle ; repli sur le vivier par position)
     });
   }
-  // Relance programmée d'un chargement de zone (throttle ou échec) — un seul timer en vol par zone, garde-fous monde/zone/discovered.
+  // Un seul timer de relance en vol par zone (throttle/échec) ; ne relance que si toujours pertinent (découverte, ni faite ni en cours).
   function zoneRetry(z,ms){ if(!z||z._zsSched)return; z._zsSched=true;
-    setTimeout(function(){ z._zsSched=false; if(world&&world._zoneById.get(z.id)===z&&z.discovered&&world._zoneSitesDone&&!world._zoneSitesDone.has(z.id))loadZoneSites(z); },ms); }
+    setTimeout(function(){ z._zsSched=false; if(world&&world._zoneById.get(z.id)===z&&z.discovered&&world._zsDone&&!world._zsDone.has(z.id)&&world._zsBusy&&!world._zsBusy.has(z.id))loadZoneSites(z); },ms); }
 
   // ---- État ----
   // Sauvegarde SÉPARÉE test/distribuable : la version distribuable démarre TOUJOURS vierge (progression propre),
@@ -1113,7 +1116,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=34;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=35;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
