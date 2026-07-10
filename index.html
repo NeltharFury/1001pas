@@ -1121,7 +1121,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=40;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=41;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1134,7 +1134,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const Z=zoneAt(state.pl.x,state.pl.y); // complétion de la contrée où l'on SE TROUVE
     if(!Z||!Z.discovered){nEl.textContent='Zone inconnue';sEl.textContent='Entre dans une zone pour voir sa progression';bEl.style.width='0%';tEl.innerHTML='';return;}
     const pois=Z.pois||[],tot=pois.length,got=pois.filter(function(p){return state.discP.has(p.id);}).length,done=state.compR.has(Z.id);
-    var raw=0;for(var pi=0;pi<world.pois.length;pi++)if(world.pois[pi]._zone===Z.id)raw++;   // vivier BRUT de la zone (avant plafond) — DIAGNOSTIC : doit être identique sur tout appareil
+    var raw=0;for(var pi=0;pi<world.pois.length;pi++)if(world.pois[pi]._zone===Z.id&&world.pois[pi].src==='osm')raw++;   // vivier Overpass DÉTERMINISTE de la zone (on ignore les sites 'tuile' de rang faible, bruit qui n'entre pas dans le top-18) → doit être IDENTIQUE partout
     // état du chargement du vivier de la zone (diagnostic) : complet ✓ / en cours / échec réseau
     var zst = Z._sitesFull ? ('vivier ✓ '+(Z._sitesFetched!=null?'('+Z._sitesFetched+' reçus)':''))
       : ((world._zsBusy&&world._zsBusy.has(Z.id))||Z._zsSched) ? 'chargement…'
