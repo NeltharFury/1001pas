@@ -235,9 +235,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.6),0 5px 14px rgba(40,24,6,.35);
     cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
   #markerWheel.open .mw-petal,#markerWheel.open .mw-center{transform:translate(-50%,-50%) scale(1);opacity:1;}
-  #markerWheel .mw-petal{width:46px;height:46px;left:0;top:0;}
+  #markerWheel .mw-petal{width:52px;height:58px;left:0;top:0;background:none;border:0;box-shadow:none;border-radius:0;}   /* pétale = la goutte du marqueur, plus de bouton parchemin */
   #markerWheel .mw-center{width:54px;height:54px;left:0;top:0;background:linear-gradient(180deg,#a4243b,#7c1a2e);border-color:rgba(60,10,20,.6);}
-  #markerWheel .mw-petal svg{width:24px;height:24px;} #markerWheel .mw-center svg{width:26px;height:26px;}
+  #markerWheel .mw-petal img{width:auto;height:52px;display:block;filter:drop-shadow(0 1px 2px rgba(40,24,6,.55));} #markerWheel .mw-center svg{width:26px;height:26px;}
   #markerWheel .mw-petal:active,#markerWheel .mw-center:active{transform:translate(-50%,-50%) scale(.9);}
   #markerPop{z-index:14;padding:11px 13px;display:none;flex-direction:column;gap:8px;min-width:150px;max-width:210px;}
   #markerPop.show{display:flex;animation:riseIn .2s ease both;}
@@ -1043,7 +1043,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     w.appendChild(center);
     const R=68,n=MARKER_TYPES.length;
     MARKER_TYPES.forEach((t,i)=>{const ang=-Math.PI/2+i*2*Math.PI/n;const b=document.createElement('button');
-      b.className='mw-petal';b.innerHTML=svgFor(MGLYPHS[t.k],MARKER_INK);
+      b.className='mw-petal';b.innerHTML='<img alt="" src="'+svgURL(_markerSVG(MGLYPHS[t.k]))+'">';   // le VRAI marqueur (goutte de cire d'or) tel qu'il sera posé
       b.style.left=(Math.cos(ang)*R)+'px';b.style.top=(Math.sin(ang)*R)+'px';
       b.onclick=e=>{e.stopPropagation();if(wheelLL)placeMarker(t.k,wheelLL.lng,wheelLL.lat);closeWheel();};
       w.appendChild(b);});
@@ -1119,7 +1119,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=58;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=59;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
