@@ -1025,17 +1025,20 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   // ═══ REPÈRES / MARQUEURS de l'utilisateur : clic long → ROUE (pétales de types autour + ITINÉRAIRE au centre) ═══
   // Couleur DÉDIÉE = azur (distincte de l'or des sites et du carmin du joueur). Stockés en local (lng/lat = stable même si le monde se refonde).
-  const MARKER_COLOR='#2f6db0';
-  const MGLYPHS={
-    home:'M4 12.5 L12 5.5 L20 12.5 M6.2 11 V19 H17.8 V11',
-    work:'M6 20 V8.5 H18 V20 M9 11.6 h1.6 M13.4 11.6 h1.6 M9 14.6 h1.6 M13.4 14.6 h1.6 M9 17.6 h1.6 M13.4 17.6 h1.6',
-    friend:'M12 20 C6 16 4 12.5 4 9.5 A3.4 3.4 0 0 1 12 7.4 A3.4 3.4 0 0 1 20 9.5 C20 12.5 18 16 12 20 Z',
-    flag:'M7 3.5 V21 M7.4 5 L18 8 L7.4 11.4 Z',
-    star:'M12 3.4 L14.3 9.7 L20.6 12 L14.3 14.3 L12 20.6 L9.7 14.3 L3.4 12 L9.7 9.7 Z'
+  // Repères du joueur = CIRE D'OR (réversible), langage distinct du carmin des sites scellés (design Fable 5).
+  const MARKER_GOLD='#B08427', MARKER_GOLD_DEEP='#6f4c0d', MARKER_INK='#6f4c0d';
+  const MGLYPHS={   // 6 empreintes (boîte 24×24, design Fable 5)
+    drapeau:'M7.5 20.5 V4 M7.5 5 h9.5 l-2.8 3.4 2.8 3.4 h-9.5',
+    tresor:'M7.6 7.6 L16.4 16.4 M16.4 7.6 L7.6 16.4',
+    oeil:'M3.8 12 C7.2 7.4 16.8 7.4 20.2 12 C16.8 16.6 7.2 16.6 3.8 12 Z M12 9.9 a2.1 2.1 0 1 0 0.01 0',
+    coeur:'M12 18.4 C6.4 14.4 4.8 10.8 7.1 8.5 C8.9 6.8 11.2 7.6 12 9.3 C12.8 7.6 15.1 6.8 16.9 8.5 C19.2 10.8 17.6 14.4 12 18.4 Z',
+    bivouac:'M4.8 18 L12 6.2 L19.2 18 M9.2 18 L12 13.4 L14.8 18 M3.8 18 h16.4',
+    plume:'M7 18.6 C7.8 12.2 11.6 7 18.4 5 C17.8 11 14 15.8 8.6 17.2 M7 18.6 L11.8 12.4'
   };
   const MROUTE='M3 11 L21 4 L14 21 L11.4 12.6 Z';   // flèche de navigation = « itinéraire jusqu'ici »
+  const PIN_TAIL=new Path2D('M -7.2 7.6 C -6.2 12.6 -2.6 14.2 0 21 C 2.6 14.2 6.2 12.6 7.2 7.6 Q 0 11.6 -7.2 7.6 Z'); // queue effilée : la pointe désigne le point exact
   const MGLYPH_P={};for(const k in MGLYPHS)MGLYPH_P[k]=new Path2D(MGLYPHS[k]);
-  const MARKER_TYPES=[{k:'home',n:'Maison'},{k:'work',n:'Travail'},{k:'friend',n:'Ami'},{k:'flag',n:'Repère'},{k:'star',n:'Favori'}];
+  const MARKER_TYPES=[{k:'drapeau',n:'Objectif'},{k:'tresor',n:'Trésor'},{k:'oeil',n:'À surveiller'},{k:'coeur',n:'Favori'},{k:'bivouac',n:'Bivouac'},{k:'plume',n:'Note'}];
   const MARKER_LABEL={};MARKER_TYPES.forEach(t=>MARKER_LABEL[t.k]=t.n);
   const MARKERS_KEY='pas1001_markers'+(DEV?'':'_prod2');
   let markers=[];
@@ -1056,7 +1059,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     w.appendChild(center);
     const R=68,n=MARKER_TYPES.length;
     MARKER_TYPES.forEach((t,i)=>{const ang=-Math.PI/2+i*2*Math.PI/n;const b=document.createElement('button');
-      b.className='mw-petal';b.innerHTML=svgFor(MGLYPHS[t.k],MARKER_COLOR);
+      b.className='mw-petal';b.innerHTML=svgFor(MGLYPHS[t.k],MARKER_INK);
       b.style.left=(Math.cos(ang)*R)+'px';b.style.top=(Math.sin(ang)*R)+'px';
       b.onclick=e=>{e.stopPropagation();if(wheelLL)placeMarker(t.k,wheelLL.lng,wheelLL.lat);closeWheel();};
       w.appendChild(b);});
@@ -1066,18 +1069,21 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function wheelOutside(e){const w=wheelEl();if(w&&!w.contains(e.target))closeWheel();}
   function closeWheel(){const w=wheelEl();if(w){w.classList.remove('open');w.innerHTML='';}wheelLL=null;}
   function placeMarker(type,lng,lat){markers.push({id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4),lng:lng,lat:lat,type:type,ts:Date.now()});saveMarkers();toast('r','✦','Repère posé',MARKER_LABEL[type]||'Repère');if(window.__wake)__wake(900);}
-  // repère = MÊME STYLE que les sites (sceau de cire) mais en AZUR → reconnaissable comme repère perso
-  function drawMarkerSeal(x,y,glyph,ph){var g=fctx,r=10.5;g.save();
-    g.fillStyle='rgba(20,40,70,0.30)';g.beginPath();g.ellipse(x+0.5,y+r*1.1,r*0.66,r*0.22,0,0,TAU);g.fill();  // ombre au sol
-    g.fillStyle='#173250';g.beginPath();g.arc(x+0.9,y+1.1,r,0,TAU);g.fill();                                  // épaisseur
-    g.fillStyle=MARKER_COLOR;waxPath(g,x,y,r,ph||0);g.fill();                                                 // cire azur
-    var sh=g.createRadialGradient(x-r*0.35,y-r*0.45,r*0.1,x,y,r);                                             // modelé
-    sh.addColorStop(0,'rgba(235,246,255,0.5)');sh.addColorStop(0.45,'rgba(255,255,255,0)');sh.addColorStop(0.8,'rgba(0,12,34,0)');sh.addColorStop(1,'rgba(0,12,34,0.42)');
-    g.fillStyle=sh;g.beginPath();g.arc(x,y,r,0,TAU);g.fill();
-    g.strokeStyle='rgba(247,236,212,0.9)';g.lineWidth=0.9;g.beginPath();g.arc(x,y,r*0.72,0,TAU);g.stroke();   // filet crème
-    if(glyph)drawGlyph(g,glyph,x,y,r*1.23,'#f2f8ff',2);g.restore();}
-  function markerAtPoint(px,py){let best=null,bd=18*18;for(const mk of markers){let p;try{p=map.project([mk.lng,mk.lat]);}catch(_){continue;}
-    const d=(p.x-px)*(p.x-px)+(p.y-py)*(p.y-py);if(d<bd){bd=d;best=mk;}}return best;}
+  // Repère du joueur : GOUTTE DE CIRE D'OR (design Fable 5) dont la POINTE désigne le sol — distinct du sceau carmin des sites.
+  // (x,y) = le point EXACT ; le corps flotte 21px au-dessus, la queue redescend jusqu'au point.
+  function drawMarkerDrop(x,y,glyph){var g=fctx;g.save();g.translate(x,y-21);
+    g.fillStyle='rgba(74,52,33,0.30)';g.beginPath();g.ellipse(0.3,23.5,5,1.6,0,0,TAU);g.fill();                 // ombre au sol (sous la pointe)
+    g.save();g.translate(0.8,1);g.fillStyle=MARKER_GOLD_DEEP;g.beginPath();g.arc(0,0,10.5,0,TAU);g.fill();g.fill(PIN_TAIL);g.restore(); // épaisseur
+    g.fillStyle=MARKER_GOLD;g.beginPath();g.arc(0,0,10.5,0,TAU);g.fill();g.fill(PIN_TAIL);                      // cire d'or (disque + queue)
+    g.save();g.beginPath();g.arc(0,0,10.5,0,TAU);g.clip();                                                      // modelé, borné au disque
+    var sh=g.createRadialGradient(-2.5,-4.2,1,0,0,10.5);
+    sh.addColorStop(0,'rgba(255,248,224,0.55)');sh.addColorStop(0.45,'rgba(255,255,255,0)');sh.addColorStop(0.8,'rgba(46,29,0,0)');sh.addColorStop(1,'rgba(46,29,0,0.42)');
+    g.fillStyle=sh;g.fillRect(-11,-11,22,22);g.restore();
+    g.strokeStyle='rgba(251,243,221,0.85)';g.lineWidth=0.7;g.beginPath();g.arc(0,0,7.4,0,TAU);g.stroke();       // filet crème
+    if(glyph)drawGlyph(g,glyph,0,0,12.4,'#fdf6e3',2.1);                                                         // empreinte
+    g.restore();}
+  function markerAtPoint(px,py){let best=null,bd=15*15;for(const mk of markers){let p;try{p=map.project([mk.lng,mk.lat]);}catch(_){continue;}
+    const dx=p.x-px,dy=(p.y-21)-py,d=dx*dx+dy*dy;if(d<bd){bd=d;best=mk;}}return best;} // corps du repère = 21px au-dessus du point
   const markerPop=()=>document.getElementById('markerPop');
   function closeMarkerPop(){const p=markerPop();if(p)p.classList.remove('show');}
   function openMarkerPop(mk){const p=markerPop();if(!p)return;let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){return;}
@@ -1129,7 +1135,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=47;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=48;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1243,7 +1249,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     map.flyTo({center:[it.lng,it.lat],zoom:Math.max(map.getZoom(),16.5),duration:900});}
   function markFromSearch(query){searchResults.classList.remove('show');topSearch.blur();searchBarEl.classList.remove('open');topSearch.value='';
     fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(query),{headers:{'Accept':'application/json'}})
-      .then(r=>r.json()).then(a=>{if(a&&a[0]){const lng=parseFloat(a[0].lon),lat=parseFloat(a[0].lat);placeMarker('flag',lng,lat);
+      .then(r=>r.json()).then(a=>{if(a&&a[0]){const lng=parseFloat(a[0].lon),lat=parseFloat(a[0].lat);placeMarker('drapeau',lng,lat);
         follow=false;recenterBtn.classList.add('show');map.flyTo({center:[lng,lat],zoom:Math.max(map.getZoom(),16),duration:900});}
         else toast('r','?','Adresse introuvable','Essaie une autre formulation');})
       .catch(()=>toast('r','?','Recherche indisponible','(réseau)'));}
@@ -1598,11 +1604,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       for(let i=0;i<N;i++){const p=proj(trail[i].x,trail[i].y);
         if(p.x<-6||p.x>W+6||p.y<-6||p.y>H+6)continue;
         const a=i/N;fctx.fillStyle=`rgba(140,28,42,${0.12+0.55*a})`;fctx.beginPath();fctx.arc(p.x,p.y,1.9,0,TAU);fctx.fill();}}
-    // REPÈRES de l'utilisateur (couleur azur dédiée) — au-dessus des sites, sous le joueur
+    // REPÈRES de l'utilisateur (goutte de cire d'OR) — au-dessus des sites, sous le joueur
     if(z>=12&&markers.length)for(const mk of markers){let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){continue;}
-      if(mp.x<-20||mp.x>W+20||mp.y<-20||mp.y>H+20)continue;
-      let ph=0,id=mk.id||'';for(let ci=0;ci<id.length;ci++)ph+=id.charCodeAt(ci);
-      drawMarkerSeal(mp.x,mp.y,MGLYPH_P[mk.type]||MGLYPH_P.flag,(ph%628)/100);}
+      if(mp.x<-24||mp.x>W+24||mp.y<-6||mp.y>H+40)continue;
+      drawMarkerDrop(mp.x,mp.y,MGLYPH_P[mk.type]||MGLYPH_P.drapeau);}
     const PS=proj(state.pl.x,state.pl.y);
     // itinéraire : PERSONNAGE → cible, suit les VRAIES routes (poly OSRM), la portion déjà faite disparaît
     if(route){const rp=proj(route.x,route.y);
