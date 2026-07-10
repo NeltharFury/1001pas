@@ -492,7 +492,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     speed:{base:6,def:2}, arriveEps:1,   // arrêt = à 1 m du clic (le CENTRE de l'emblème atteint le clic, même en zoom fort ; > pas/frame donc pas d'oscillation)
     grid:{spacing:750, jitter:230},                    // taille des contrées (MONDE ILLIMITÉ, à la volée)
     osm:{radius:1600, refetch:1000},                   // rayon requête OSM (m) + distance parcourue avant recharge
-    poi:{ nameRadius:90, reachRadius:32 },
+    poi:{ nameRadius:90, reachRadius:32, dedup:40 },   // dedup (m) : même nom à < 40 m = MÊME site (fusionne tuile↔Overpass, coords légèrement différentes)
     xp:{ perPOI:100, completePerSite:10 },             // site découvert = +100 ; contrée complétée = +10 × (nb sites) ; contrée découverte = 0 ; marche = +1/pas
     fogLift:1.2, trail:{max:1400,minDist:3},
     route:{arrive:20},                                 // m : distance d'arrivée d'un itinéraire
@@ -574,7 +574,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       const out=[];for(const R of REGION_CACHE.values()){if(!R.discovered)continue;if(R.bb[2]<mnx||R.bb[0]>mxx||R.bb[3]<mny||R.bb[1]>mxy)continue;out.push(R);}return {list:out,grid:false};}
     const out=[];for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)out.push(buildRegion(i,j));return {list:out,grid:true};}
   function initWorld(C){REGION_CACHE.clear();bgGen++;   // nouveau monde → tout replay différé encore en vol devient caduc
-    world={C:{lng:C[0],lat:C[1]},lngM:111320*Math.cos(C[1]*Math.PI/180),places:[],commune:null,pois:[],poiByCell:new Map(),knownPOIs:0,_poiById:new Map(),_placeKeys:new Set(),
+    world={C:{lng:C[0],lat:C[1]},lngM:111320*Math.cos(C[1]*Math.PI/180),places:[],commune:null,pois:[],poiByCell:new Map(),knownPOIs:0,_poiById:new Map(),_poiByName:new Map(),_placeKeys:new Set(),
       communes:[],_commIds:new Set(),_commChunks:new Set(),_zoneById:new Map(),water:[]};}
   // clé de lieu INDÉPENDANTE de la source (tuiles vectorielles OU Overpass) → fusion + déblocage stables
   function poiKey(lng,lat,name){return normStr(name)+'@'+lng.toFixed(3)+','+lat.toFixed(3);}
@@ -603,7 +603,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       const tg=e.tags||{};
       if(tg.place&&tg.name){places.push({lng:lo,lat:la,name:tg.name,t:tg.place});continue;}
       if(tg.access==='private'||tg.access==='no'||tg.access==='permit'||tg.access==='customers')continue; // LIEUX PUBLICS uniquement (pas d'intrusion privée)
-      const ty=osmType(tg);if(ty&&tg.name){const id='osm'+(e.type||'n')[0]+e.id;if(!seen.has(id)){seen.add(id);pois.push({id:id,lng:lo,lat:la,g:ty.key,type:ty.label,n:tg.name,wiki:tg.wikipedia||'',wd:tg.wikidata||'',desc:tg.description||tg.inscription||''});}}}
+      const ty=osmType(tg);if(ty&&tg.name){const id='osm'+(e.type||'n')[0]+e.id;if(!seen.has(id)){seen.add(id);pois.push({id:id,lng:lo,lat:la,g:ty.key,type:ty.label,n:tg.name,src:'osm',wiki:tg.wikipedia||'',wd:tg.wikidata||'',desc:tg.description||tg.inscription||''});}}}
     return {places,pois};}
   // Overpass -> lng/lat BRUTS ; on interroge PLUSIEURS miroirs EN PARALLÈLE (le 1er qui répond gagne) → chargement rapide
   function overpassData(center,radius,cb){
@@ -613,7 +613,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       +'node["place"~"suburb|neighbourhood|quarter|borough|city_block|hamlet|locality|village|town|city"]('+bb+');'
       +'node["amenity"="fountain"]('+bb+');'
       +'node["tourism"~"viewpoint|artwork|museum|attraction"]('+bb+');'
-      +'nwr["historic"~"monument|memorial|castle|ruins"]('+bb+');'
+      +'nwr["historic"~"monument|memorial|castle|ruins|archaeological_site"]('+bb+');'
       +'node["natural"="peak"]('+bb+');'
       +'node["amenity"="place_of_worship"]('+bb+');'
       +');out center 500;';
@@ -632,25 +632,63 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     for(const p of (d.places||[])){const k=p.t+'|'+p.name+'|'+p.lng.toFixed(4);if(world._placeKeys.has(k))continue;world._placeKeys.add(k);world.places.push({x:toMx(p.lng),y:toMy(p.lat),name:p.name,t:p.t});}
     if(!world.commune)world.commune=computeCommune(world.places);
     let added=false;
-    for(const P of (d.pois||[])){const key=poiKey(P.lng,P.lat,P.n);const ex=world._poiById.get(key);
-      if(ex){if(!ex.wiki&&P.wiki)ex.wiki=P.wiki;if(!ex.wd&&P.wd)ex.wd=P.wd;if(!ex.desc&&P.desc)ex.desc=P.desc;continue;}
-      const P2={id:key,x:toMx(P.lng),y:toMy(P.lat),lng:P.lng,lat:P.lat,g:P.g,n:P.n,type:P.type,wiki:P.wiki||'',wd:P.wd||'',desc:P.desc||''};
-      world._poiById.set(key,P2);world.pois.push(P2);added=true;}
+    // Ingestion dans un ORDRE DÉTERMINISTE (par identité) → dans un même lot, le « survivant » du dédup nom+proximité ne dépend
+    // plus de l'ordre d'arrivée réseau (résout la sensibilité à l'ordre des grappes homonymes au sein d'une réponse Overpass).
+    const _pois=(d.pois||[]).slice().sort((a,b)=>{const ia=poiIdent(a),ib=poiIdent(b);return ia<ib?-1:ia>ib?1:0;});
+    for(const P of _pois){const key=poiKey(P.lng,P.lat,P.n);const src=P.src||'tile';const px=toMx(P.lng),py=toMy(P.lat);
+      const ex=world._poiById.get(key);
+      if(ex){mergePoi(ex,P,src);continue;}
+      // Dédup secondaire : MÊME nom à faible distance = MÊME site. Les tuiles quantifient les coordonnées → clé (arrondie ~100 m)
+      // parfois différente de celle d'Overpass pour un site identique → sans ça, doublons + comptes qui divergent test↔téléphone.
+      const nm=normStr(P.n);let dup=null;const lst=world._poiByName.get(nm);
+      if(lst)for(const e of lst){if(Math.hypot(e.x-px,e.y-py)<CONFIG.poi.dedup){dup=e;break;}}
+      if(dup){mergePoi(dup,P,src);continue;}
+      const P2={id:key,x:px,y:py,lng:P.lng,lat:P.lat,g:P.g,n:P.n,type:P.type,src:src,wiki:P.wiki||'',wd:P.wd||'',desc:P.desc||''};
+      world._poiById.set(key,P2);world.pois.push(P2);
+      if(!world._poiByName.has(nm))world._poiByName.set(nm,[]);world._poiByName.get(nm).push(P2);
+      added=true;}
     reindexPois();refreshNames();if(added)retroUnlock();}
+  // Fusion d'un site déjà connu : enrichit les tags, et PROMEUT tuile→Overpass (coords EXACTES + source déterministe).
+  // On garde l'id (clé) existant → une découverte déjà acquise (state.discP) reste valable.
+  function mergePoi(ex,P,src){
+    if(!ex.wiki&&P.wiki)ex.wiki=P.wiki;if(!ex.wd&&P.wd)ex.wd=P.wd;if(!ex.desc&&P.desc)ex.desc=P.desc;
+    if(src==='osm'&&ex.src!=='osm'){ex.src='osm';ex.x=(P.lng-world.C.lng)*world.lngM;ex.y=(P.lat-world.C.lat)*LATM;ex.lng=P.lng;ex.lat=P.lat;if(P.g)ex.g=P.g;if(P.type)ex.type=P.type;}}
   // Débloque après coup les lieux qu'on a déjà croisés mais qui n'étaient pas encore chargés (fini le « je suis passé et rien »)
   function retroUnlock(){const pts=[{x:state.pl.x,y:state.pl.y}],n=trail.length;
     for(let i=Math.max(0,n-90);i<n;i++)pts.push(trail[i]);
-    let cnt=0;for(const P of world.pois){if(state.discP.has(P.id))continue;
+    let cnt=0;for(const P of world.pois){if(state.discP.has(P.id)||!P._sel)continue;   // uniquement la sélection plafonnée (cohérent avec la marche en direct)
       for(const q of pts){if(Math.hypot(q.x-P.x,q.y-P.y)<CONFIG.poi.reachRadius){const z=world._zoneById.get(P._zone);if(z&&z.discovered){reachPOI(P,z,true);cnt++;}break;}}}
     if(cnt)toast('poi','✦',cnt+' site'+(cnt>1?'s':'')+' découvert'+(cnt>1?'s':'')+' en chemin','+'+(cnt*CONFIG.xp.perPOI)+' XP');}
   const POI_PER_CELL=18; // nb max de lieux affichés/atteignables par ZONE (les tuiles en fournissent beaucoup)
-  // Bucket SPATIAL (grille) pour trouver vite les lieux proches + assignation de chaque lieu à sa ZONE réelle (commune/quartier).
-  function reindexPois(){const byCell=new Map();
+  const SITE_RANK={peak:6,view:6,castle:6,monument:5,museum:5,ruins:4,worship:3,art:3,curio:2,fountain:1}; // « marquant » d'abord
+  function poiHash(s){let h=2166136261;s=s||'';for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+  // Identité INDÉPENDANTE DE LA SOURCE (nom + coords exactes) → identique sur tout appareil une fois le site connu d'Overpass
+  // (l'id, lui, peut varier selon quelle source est arrivée en 1re). C'est ce qui rend le départage vraiment déterministe.
+  function poiIdent(p){return normStr(p.n)+'@'+(p.lng!=null?p.lng.toFixed(4):'')+','+(p.lat!=null?p.lat.toFixed(4):'');}
+  // Ordre de SÉLECTION des sites d'une zone — 100 % DÉTERMINISTE (identique sur tout appareil et à chaque ouverture) :
+  //  1) déjà découverts d'abord (on ne perd JAMAIS une découverte)  2) Overpass (déterministe) avant tuiles (variables)
+  //  3) sites marquants d'abord  4) hash stable de l'identité → départage constant, sans dépendre de l'ordre d'arrivée réseau.
+  function poiSelCmp(a,b){
+    const ad=state.discP.has(a.id)?0:1,bd=state.discP.has(b.id)?0:1;if(ad!==bd)return ad-bd;
+    const as=(a.src==='osm')?0:1,bs=(b.src==='osm')?0:1;if(as!==bs)return as-bs;
+    const ar=SITE_RANK[a.g]||0,br=SITE_RANK[b.g]||0;if(ar!==br)return br-ar;
+    const ia=poiIdent(a),ib=poiIdent(b),ha=poiHash(ia),hb=poiHash(ib);if(ha!==hb)return ha-hb;
+    return ia<ib?-1:ia>ib?1:0;}
+  // Bucket SPATIAL (grille) sur la SÉLECTION plafonnée → ce qu'on peut atteindre = ce qui est affiché = ce qui est compté.
+  function reindexPois(){
     for(const z of world.communes)z.pois=[];
-    let reach=0;
-    for(const p of world.pois){const c=cellIndexOf(p.x,p.y),k=regionKey(c.i,c.j);if(!byCell.has(k))byCell.set(k,[]);byCell.get(k).push(p);
-      const z=zoneAt(p.x,p.y);p._zone=z?z.id:null;
-      if(z&&z.pois.length<POI_PER_CELL){z.pois.push(p);reach++;}}
+    const byZone=new Map();
+    for(const p of world.pois){p._sel=false;const z=zoneAt(p.x,p.y);p._zone=z?z.id:null;if(z){let a=byZone.get(z.id);if(!a){a=[];byZone.set(z.id,a);}a.push(p);}}
+    const byCell=new Map();let reach=0;
+    for(const z of world.communes){let arr=byZone.get(z.id);if(!arr)continue;
+      arr.sort(poiSelCmp);
+      let disc=0;for(const p of arr)if(state.discP.has(p.id))disc++;
+      const cap=Math.max(POI_PER_CELL,disc);           // jamais rogner en dessous des sites déjà découverts
+      z.pois=arr.length>cap?arr.slice(0,cap):arr;
+      // _sel = fait partie de la SÉLECTION plafonnée. TOUS les chemins de déblocage (marche, rétro, arrière-plan) s'y limitent
+      // → « atteignable = affiché = compté » identique partout ; un site au-delà du top-18 n'est débloqué par AUCUN chemin.
+      for(const p of z.pois){p._sel=true;const c=cellIndexOf(p.x,p.y),k=regionKey(c.i,c.j);let b=byCell.get(k);if(!b){b=[];byCell.set(k,b);}b.push(p);}
+      reach+=z.pois.length;}
     world.poiByCell=byCell;world.knownPOIs=Math.max(reach,state.discP.size);}
   function refreshNames(){for(const R of REGION_CACHE.values())nameRegion(R);}
   // ---- VRAIS TERRITOIRES : polygones de COMMUNE (admin_level 8, Overpass) = bornes + noms RÉELS ----
@@ -764,10 +802,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const pois=[],places=[];
     for(const ft of feats){const pr=ft.properties||{};if(!pr.name)continue;const ty=tilePoiType(pr);if(!ty)continue;
       const g=ft.geometry;if(!g||g.type!=='Point')continue;
-      pois.push({lng:g.coordinates[0],lat:g.coordinates[1],g:ty.key,type:ty.label,n:pr.name,wiki:'',wd:'',desc:''});}
+      pois.push({lng:g.coordinates[0],lat:g.coordinates[1],g:ty.key,type:ty.label,n:pr.name,src:'tile',wiki:'',wd:'',desc:''});}
     try{const pk=map.querySourceFeatures('omt',{sourceLayer:'mountain_peak'});
       for(const ft of pk){const pr=ft.properties||{};if(!pr.name)continue;const g=ft.geometry;if(!g||g.type!=='Point')continue;
-        pois.push({lng:g.coordinates[0],lat:g.coordinates[1],g:'peak',type:'Sommet',n:pr.name,wiki:'',wd:'',desc:''});}}catch(e){}
+        pois.push({lng:g.coordinates[0],lat:g.coordinates[1],g:'peak',type:'Sommet',n:pr.name,src:'tile',wiki:'',wd:'',desc:''});}}catch(e){}
     try{const pl=map.querySourceFeatures('omt',{sourceLayer:'place'});
       for(const ft of pl){const pr=ft.properties||{};if(!pr.name||!PLACE_CLASSES.test(pr.class||''))continue;const g=ft.geometry;if(!g||g.type!=='Point')continue;
         places.push({lng:g.coordinates[0],lat:g.coordinates[1],name:pr.name,t:pr.class});}}catch(e){}
@@ -1037,7 +1075,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=26;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=27;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1637,7 +1675,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function replayUnlockPass(pts){ if(!world||!ready||!pts||!pts.length)return {z:0,s:0};
     var z0=state.discR.size, s0=state.discP.size;
     for(var j=0;j<pts.length;j++){var Z=zoneAt(pts[j].x,pts[j].y);if(Z)discoverZone(Z);}          // contrées CHARGÉES traversées
-    for(var k=0;k<world.pois.length;k++){var P=world.pois[k];if(state.discP.has(P.id))continue;    // sites croisés (contrée découverte + à portée)
+    for(var k=0;k<world.pois.length;k++){var P=world.pois[k];if(state.discP.has(P.id)||!P._sel)continue;    // sites croisés (sélection plafonnée uniquement → marchable = affiché = compté)
       for(var p=0;p<pts.length;p++){if(Math.hypot(pts[p].x-P.x,pts[p].y-P.y)<CONFIG.poi.reachRadius){var zz=world._zoneById.get(P._zone);if(zz&&zz.discovered)reachPOI(P,zz,true);break;}}}
     return {z:state.discR.size-z0, s:state.discP.size-s0}; }
   function bgToast(z,s){ if(!z&&!s)return; var parts=[];
