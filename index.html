@@ -1028,15 +1028,17 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function svgFor(path,col){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+path+'" fill="none" stroke="'+col+'" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';}
   const wheelEl=()=>document.getElementById('markerWheel');
   const wheelOpen=()=>{const w=wheelEl();return !!(w&&w.classList.contains('open'));};
-  let wheelLL=null, suppressClick=false;
+  let wheelLL=null, suppressClick=false, _wheelBitmap=null;
   function openWheel(clientX,clientY){
     const w=wheelEl();if(!w)return;const mc=map.getContainer(),rect=mc.getBoundingClientRect();
     const px=clientX-rect.left, py=clientY-rect.top;
-    try{wheelLL=map.unproject([px,py]);}catch(_){return;}
-    w.innerHTML='';w.style.left=px+'px';w.style.top=py+'px';
+    try{wheelLL=map.unproject([px,py]);}catch(_){return;}                       // le marqueur ira au point RÉELLEMENT pressé
+    // position d'AFFICHAGE bornée : la roue reste ENTIÈREMENT à l'écran (jamais coupée, même au bord)
+    const DR=112, dispX=Math.max(DR,Math.min(rect.width-DR,px)), dispY=Math.max(DR,Math.min(rect.height-DR,py));
+    w.innerHTML='';w.style.left=dispX+'px';w.style.top=dispY+'px';
     const n=MARKER_TYPES.length, step=2*Math.PI/n;
     const disc=document.createElement('div');disc.className='mw-disc';
-    const img=document.createElement('img');img.alt='';img.src=svgURL(_wheelSVG(MARKER_TYPES.map(t=>t.k)));
+    const img=document.createElement('img');img.alt='';img.src=_wheelBitmap||svgURL(_wheelSVG(MARKER_TYPES.map(t=>t.k)));  // BITMAP pré-rendu : le filtre de cire n'est PAS recalculé pendant l'anim → pas de surcharge GPU mobile
     disc.appendChild(img);w.appendChild(disc);
     // clic : rayon → centre (itinéraire) ou quartier ; angle → quel marqueur. Insensible au nb de quartiers.
     disc.addEventListener('click',e=>{e.stopPropagation();
@@ -1120,7 +1122,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=64;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=65;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1529,6 +1531,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     s+='<path d="'+MROUTE+'" transform="scale('+rs.toFixed(3)+') translate(-12 -12)" fill="#f7ecd4" stroke="#f7ecd4" stroke-width="0.6" stroke-linejoin="round"/>';  // flèche itinéraire
     return s+'</svg>';}
   function svgURL(svg){return 'data:image/svg+xml,'+encodeURIComponent(svg);}
+  // Pré-rendu de la roue en BITMAP (PNG) : le filtre de cire (feTurbulence) n'est calculé qu'UNE fois au décodage,
+  // jamais réappliqué pendant l'animation de scale → évite le freeze/surcharge GPU mobile quand la roue s'anime/est coupée.
+  function buildWheelBitmap(){try{var im=new Image();
+    im.onload=function(){try{var S=2,sz=Math.round(WHEEL_VB*S),c=document.createElement('canvas');c.width=c.height=sz;
+      c.getContext('2d').drawImage(im,0,0,sz,sz);_wheelBitmap=c.toDataURL('image/png');}catch(_){}};
+    im.src=svgURL(_wheelSVG(MARKER_TYPES.map(t=>t.k)));}catch(_){}}
+  try{setTimeout(buildWheelBitmap,300);}catch(_){}   // pré-rend tôt (bien avant tout clic long) sans gêner le boot
   const _imgCache=new Map();
   function _cachedImg(key,svg){var e=_imgCache.get(key);if(e)return e.ready?e.img:null;
     var img=new Image();e={img:img,ready:false};_imgCache.set(key,e);
