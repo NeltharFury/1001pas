@@ -688,8 +688,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const byZone=new Map();
     for(const p of world.pois){p._sel=false;const z=zoneAt(p.x,p.y);p._zone=z?z.id:null;if(z){let a=byZone.get(z.id);if(!a){a=[];byZone.set(z.id,a);}a.push(p);}}
     const byCell=new Map();let reach=0;
-    for(const z of world.communes){if(z.discovered)loadZoneSites(z);   // vivier COMPLET de la commune (déterministe) dès qu'elle est découverte
-      let arr=byZone.get(z.id);if(!arr)continue;
+    for(const z of world.communes){let arr=byZone.get(z.id);if(!arr)continue;
       arr.sort(poiSelCmp);
       let disc=0;for(const p of arr)if(state.discP.has(p.id))disc++;
       const cap=Math.max(POI_PER_CELL,disc);           // jamais rogner en dessous des sites déjà découverts
@@ -911,7 +910,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function checkAch(){}   // succès retirés
   const discToastNames=new Set(); // pour ne pas répéter « Zone découverte » pour un même nom
   // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Zone découverte »)
-  function discoverZone(Z){if(!Z||state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true; // découvrir une contrée = 0 XP
+  function discoverZone(Z){if(!Z)return;loadZoneSites(Z); // vivier COMPLET de la commune où l'on entre/est (zone COURANTE uniquement → pas de rafale de fetch sur TOUTES les communes déjà découvertes)
+    if(state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true; // découvrir une contrée = 0 XP
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
   function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
@@ -1108,7 +1108,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=28;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=29;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
