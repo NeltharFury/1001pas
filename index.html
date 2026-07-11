@@ -218,22 +218,21 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         padding:7px 18px;border-radius:11px;background:rgba(62,43,22,.88);box-shadow:0 8px 22px rgba(30,18,4,.4);
         font-style:italic;font-size:12.5px;color:#f2e5c4;white-space:nowrap;transition:opacity .6s;animation:floatY 5s ease-in-out infinite;}
   #hint.gone{opacity:0;}
-  /* WARNING — sur MOBILE remplit l'écran ; sur grand écran (PC de test) borné à une taille d'ÉCRAN DE TÉLÉPHONE, centré, pour prévisualiser le rendu mobile. Fond hachuré dans la couleur du type (ROUGE = interdit, ORANGE = passage). Bloquant jusqu'à « Je comprends ». */
+  /* WARNING — sur MOBILE remplit l'écran ; sur grand écran (PC de test) borné à une taille d'ÉCRAN DE TÉLÉPHONE, centré, pour prévisualiser le rendu mobile. Fond hachuré dans la couleur du type (ROUGE = interdit, JAUNE = passage). Bloquant jusqu'à « Je comprends ». */
   #fzModal{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;background:rgba(18,9,5,.55);}
   #fzModal.show{display:flex;}
-  #fzScreen{position:relative;width:100%;height:100%;max-width:460px;max-height:940px;display:flex;align-items:center;justify-content:center;text-align:center;padding:34px;overflow:hidden;}
+  #fzScreen{position:relative;width:100%;height:100%;max-width:460px;max-height:940px;display:flex;text-align:center;padding:34px;overflow-y:auto;overflow-x:hidden;}
   @media(min-width:520px){ #fzScreen{height:94vh;border-radius:24px;box-shadow:0 22px 60px rgba(0,0,0,.5);} }   /* grand écran → cadre « téléphone » arrondi, centré */
-  #fzModal.k-forbidden #fzScreen{background:#7d1f1f;}
-  #fzModal.k-passage #fzScreen{background:#b5651d;}
+  #fzModal.k-forbidden #fzScreen{background:#A4243B;}
+  #fzModal.k-passage #fzScreen{background:#B08427;}
   #fzScreen::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.17) 0 4px,transparent 4px 15px);}  /* hachures */
-  #fzInner{position:relative;z-index:1;max-width:400px;color:#fff3ee;text-shadow:0 2px 7px rgba(0,0,0,.45);}
+  #fzInner{position:relative;z-index:1;max-width:400px;margin:auto;color:#fff3ee;text-shadow:0 2px 7px rgba(0,0,0,.45);}
   #fzInner .fz-ic{font-size:56px;line-height:1;margin-bottom:6px;}
   #fzInner h3{font-family:var(--display);font-weight:700;font-size:23px;letter-spacing:3px;text-transform:uppercase;margin:0 0 18px;}
   #fzInner p{font-family:var(--serif);font-size:16.5px;line-height:1.55;margin:0 0 13px;}
   #fzChk{display:inline-flex;align-items:center;gap:9px;font-family:var(--serif);font-size:14px;margin:20px 0 22px;cursor:pointer;user-select:none;color:#fff3ee;}
   #fzChk input{width:18px;height:18px;cursor:pointer;accent-color:#fff;}
-  #fzOk{padding:13px 44px;border:none;border-radius:12px;background:#fbeee0;color:#7d1f1f;font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);transition:transform .1s;}
-  #fzModal.k-passage #fzOk{color:#8a4a10;}
+  #fzOk{padding:13px 44px;border:1.5px solid rgba(255,243,238,.85);border-radius:12px;background:rgba(28,12,4,.34);color:#fff;font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35);text-shadow:0 1px 3px rgba(0,0,0,.45);transition:transform .1s;}
   #fzOk:active{transform:translateY(1px);}
   #loadChip{top:122px;left:50%;transform:translateX(-50%);padding:5px 13px 5px 10px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;display:inline-flex;align-items:center;gap:7px;}
   #loadChip.show{opacity:1;}
@@ -726,7 +725,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     for(const z of world.communes){let arr=byZone.get(z.id);if(!arr)continue;
       arr.sort(poiSelCmp);
       if(arr.some(p=>p.src==='osm'))arr=arr.filter(p=>p.src==='osm'); // dès qu'Overpass a chargé la commune → UNIQUEMENT ses sites (déterministes, identiques partout) ; avant ça, aperçu via les tuiles
-      if(world.forbidden.length)arr=arr.filter(p=>!inForbidden(p.x,p.y)); // SITES DANS UNE ZONE INTERDITE = EXCLUS (pas de sceau, pas d'XP, pas comptés, pas dans les cellules/_sel) → aucune incitation à y entrer
+      if(world.forbidden.length)arr=arr.filter(function(p){const z=inForbidden(p.x,p.y);return !(z&&z.kind==='forbidden');}); // sites EXCLUS seulement des zones INTERDITES (rouge) → aucune incitation à y entrer ; conservés en zone de PASSAGE (orange)
       z.pois=arr;                                      // PLUS DE PLAFOND : TOUS les sites remarquables de la commune sont explorables (choix Étienne) ; le dessin ne montre que ceux à l'écran (culling) → pas de surcharge
       // _sel = fait partie de la SÉLECTION plafonnée. TOUS les chemins de déblocage (marche, rétro, arrière-plan) s'y limitent
       // → « atteignable = affiché = compté » identique partout ; un site au-delà du top-18 n'est débloqué par AUCUN chemin.
@@ -808,26 +807,29 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // ---- ZONES INTERDITES (aires militaires réelles OSM) — build 90, étape 1 : AFFICHAGE ----
   // landuse=military + military=danger_area/range/training_area. Données STATIQUES → cache DUR (localStorage), 1 requête par secteur.
   // Rendu = hachures rouge-brun PAR-DESSUS la brume (avertissement toujours visible). Étape suivante : notif à l'entrée + XP/loot désactivés dedans.
-  const FORB_KEY='pas1001_forbidden_v1',FORB_MAX=200;
+  const FORB_KEY='pas1001_forbidden_v1',FORB_MAX=200,FORB_MAX_AREA=40e6;   // 40 km² : au-delà (parc régional…) ce n'est plus une "zone" jouable → ignoré (sinon la moitié du canton en hachures)
   function forbCacheRead(){try{return JSON.parse(localStorage.getItem(FORB_KEY)||'{}')||{};}catch(e){return {};}}
   function forbCacheAddMany(list){if(!list||!list.length)return;try{const m=forbCacheRead(),t=Date.now();for(const f of list)m[f.id]={name:f.name||'',kind:f.kind||'forbidden',poly:f.poly,ts:t};   // UNE seule écriture localStorage par récolte (pas une par zone → économe)
     const ids=Object.keys(m);if(ids.length>FORB_MAX){ids.sort((a,b)=>(m[a].ts||0)-(m[b].ts||0));for(let i=0;i<ids.length-FORB_MAX;i++)delete m[ids[i]];}
     localStorage.setItem(FORB_KEY,JSON.stringify(m));}catch(e){}}
   function buildForbidden(f){if(!f||!f.poly||!f.poly.length)return null;
-    const rings=[];for(const ring of f.poly){if(!ring||ring.length<3)continue;rings.push(ring.map(p=>m2(p[0],p[1])));}   // lng/lat → mètres MONDE (comme les communes)
+    const rings=[];for(const ring of f.poly){if(!ring||ring.length<3)continue;const rm=ring.map(p=>m2(p[0],p[1])),s=simplifyRing(rm,12);rings.push(s.length>=4?s:rm);}   // lng/lat → mètres MONDE + simplification Douglas-Peucker 12 m → grandes réserves allégées (perf : dessin + point-dans-polygone appelé par sous-pas)
     if(!rings.length)return null;
+    let area=0;for(const r of rings){let a=0;for(let i=0,j=r.length-1;i<r.length;j=i++)a+=(r[j][0]+r[i][0])*(r[j][1]-r[i][1]);area+=Math.abs(a/2);}   // aire (m²) par lacet
+    if(area>FORB_MAX_AREA)return null;   // trop grand (parc régional de centaines de km²) → ce n'est pas une "zone" jouable, on l'ignore
     let bb=[1e18,1e18,-1e18,-1e18];for(const r of rings){const b=ringBB(r);bb=[Math.min(bb[0],b[0]),Math.min(bb[1],b[1]),Math.max(bb[2],b[2]),Math.max(bb[3],b[3])];}
     return {id:f.id,name:f.name||'',kind:f.kind||'forbidden',rings:rings,bb:bb,cx:(bb[0]+bb[2])/2,cy:(bb[1]+bb[3])/2};}
   function ingestForbidden(f){if(!world||!f||world._forbIds.has(f.id))return;const zz=buildForbidden(f);if(!zz)return;world._forbIds.add(f.id);world.forbidden.push(zz);}
   function loadForbiddenCache(){if(!world)return;const m=forbCacheRead();for(const id in m)ingestForbidden({id:id,name:m[id].name,kind:m[id].kind,poly:m[id].poly});}
   // La position (x,y en mètres MONDE) est-elle DANS une zone interdite ? → renvoie la zone (ou null). Utilisé pour couper l'XP des pas + notifier à l'entrée.
   function inForbidden(x,y){if(!world||!world.forbidden.length)return null;
+    let pass=null;   // ROUGE (interdit) PRIORITAIRE sur ORANGE (passage) là où ils se chevauchent (ex. militaire dans une réserve) → l'interdit l'emporte TOUJOURS, quel que soit l'ordre d'ingestion
     for(const F of world.forbidden){if(x<F.bb[0]||x>F.bb[2]||y<F.bb[1]||y>F.bb[3])continue;   // rejet rapide par la boîte
       let inside=false;for(const r of F.rings)if(pointInRing(x,y,r))inside=!inside;            // pair/impair (gère les trous)
-      if(inside)return F;}
-    return null;}
-  // Recolle les anneaux FERMÉS d'une relation multipolygone (membres = segments de way) bout-à-bout ; ignore en sécurité ce qui ne ferme pas.
-  function stitchRings(members){
+      if(inside){if(F.kind==='forbidden')return F;if(!pass)pass=F;}}
+    return pass;}
+  // Recolle les anneaux FERMÉS d'une relation multipolygone (membres = segments de way) bout-à-bout ; ignore en sécurité ce qui ne ferme pas. (nom distinct du stitchRings des communes)
+  function stitchForbiddenRings(members){
     const segs=[];for(const mem of (members||[])){if(mem.type!=='way'||!mem.geometry||mem.geometry.length<2)continue;segs.push(mem.geometry.map(g=>[g.lon,g.lat]));}
     const eq=(a,b)=>Math.abs(a[0]-b[0])<1e-7&&Math.abs(a[1]-b[1])<1e-7,used=new Array(segs.length).fill(false),rings=[];
     for(let i=0;i<segs.length;i++){if(used[i])continue;used[i]=true;let ring=segs[i].slice(),ext=true,guard=0;
@@ -838,9 +840,21 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       if(ring.length>=4&&eq(ring[0],ring[ring.length-1]))rings.push(ring);}
     return rings;
   }
-  // Course de miroirs Overpass (le 1er qui répond gagne) pour les aires militaires d'une bbox, AVEC géométrie (ways ET relations multipolygones) → cb([{id,name,poly}]) ou cb(null)
+  // Type d'une zone d'après ses tags : INTERDIT (rouge) = militaire / prison / access=no ; PASSAGE (orange) = réserve naturelle / access permissif/destination.
+  function forbKind(t){if(!t)return 'forbidden';
+    if(t.landuse==='military'||t.military||t.amenity==='prison'||t.access==='no'||t.access==='private')return 'forbidden';
+    if(t.access==='permissive'||t.access==='destination')return 'passage';   // ORANGE = passage toléré (accès permissif) ; PAS les réserves naturelles (aucune restriction d'accès réelle)
+    return 'forbidden';}
+  // Course de miroirs Overpass (le 1er qui répond gagne) pour les ZONES d'accès d'une bbox (rouge=interdit / orange=passage), ways ET relations multipolygones → cb([{id,name,kind,poly}]) ou cb(null).
+  // Jeu de tags CURÉ (pas tout `access` : `access=private` = piscines/parkings privés → inonderait la carte). Carrières/centrales volontairement exclues (souvent désaffectées/bruit).
   function forbiddenFetchBB(bb,cb){
-    const q='[out:json][timeout:25];(way["landuse"="military"]('+bb+');relation["landuse"="military"]('+bb+');way["military"~"danger_area|range|training_area"]('+bb+');relation["military"~"danger_area|range|training_area"]('+bb+'););out geom 250;';
+    const q='[out:json][timeout:25];('
+      +'way["landuse"="military"]('+bb+');relation["landuse"="military"]('+bb+');'
+      +'way["military"]["military"!~"^(bunker|trench)$"]('+bb+');relation["military"]('+bb+');'   // exclut bunkers/tranchées (minuscules + très denses en CH → risque de tronquer la requête)
+      +'way["amenity"="prison"]('+bb+');relation["amenity"="prison"]('+bb+');'
+      +'way["access"="no"][!highway][!barrier][!building][!amenity][!leisure][!sport]('+bb+');relation["access"="no"][!highway][!building]('+bb+');'
+      +'way["access"~"^(permissive|destination)$"][!highway][!barrier][!building][!amenity][!leisure]('+bb+');relation["access"~"^(permissive|destination)$"][!highway][!building]('+bb+');'
+      +');out geom 500;';   // ORANGE = uniquement les vrais tags d'accès « passage » (permissive/destination). PAS leisure=nature_reserve : une réserve/parc régional n'a PAS de restriction d'accès (les gens y vivent/circulent) — ce serait absurde.
     const eps=['https://overpass.osm.ch/api/interpreter','https://overpass-api.de/api/interpreter','https://overpass.openstreetmap.fr/api/interpreter'];
     let done=false,fails=0;const ctrls=eps.map(()=>{try{return new AbortController();}catch(_){return null;}});
     function finish(res){if(done)return;done=true;clearTimeout(to);ctrls.forEach(c=>{if(c){try{c.abort();}catch(_){}}});cb(res);}
@@ -849,9 +863,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       .then(r=>r.ok?r.json():Promise.reject(r.status)).then(js=>{if(done)return;if(!js||!js.elements)return Promise.reject('noelem');
         if(js.remark&&/timed?\s*out|timeout|runtime error/i.test(js.remark))return Promise.reject('partial');
         const out=[];for(const e of js.elements){const nm=(e.tags&&e.tags.name)||'';
-          const kind=(e.tags&&(e.tags.access==='permissive'||e.tags.access==='destination'||e.tags.foot==='yes'||e.tags.foot==='permissive'||e.tags.foot==='destination'))?'passage':'forbidden';   // passage TOLÉRÉ (orange) vs INTERDIT (rouge) ; militaire = interdit. Prêt pour access=no/privé/permissive plus tard.
+          const kind=forbKind(e.tags);   // rouge (interdit) vs orange (passage) selon les tags
           if(e.type==='way'&&e.geometry&&e.geometry.length>=3)out.push({id:'f'+e.id,name:nm,kind:kind,poly:[e.geometry.map(g=>[g.lon,g.lat])]});
-          else if(e.type==='relation'&&e.members){const rings=stitchRings(e.members);if(rings.length)out.push({id:'r'+e.id,name:nm,kind:kind,poly:rings});}}   // grandes bases = relations multipolygones
+          else if(e.type==='relation'&&e.members){const rings=stitchForbiddenRings(e.members);if(rings.length)out.push({id:'r'+e.id,name:nm,kind:kind,poly:rings});}}   // grandes zones = relations multipolygones
         finish(out);})
       .catch(()=>{if(done)return;fails++;if(fails>=eps.length)finish(null);});});
   }
@@ -866,9 +880,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const bb=(c.lat-D)+','+(c.lng-Dl)+','+(c.lat+D)+','+(c.lng+Dl);
     forbiddenFetchBB(bb,function(list){if(!list){world._forbTried.delete(key);return;}const added=[];for(const f of list){if(!world._forbIds.has(f.id)){ingestForbidden(f);added.push(f);}}if(added.length){forbCacheAddMany(added);if(world.pois&&world.pois.length)reindexPois();checkForbiddenEntry();if(window.__wake)__wake(400);}});   // re-index → sites dans la zone fraîchement chargée disparaissent ; check entrée → bandeau si on est DÉJÀ dedans (arrivé avant le fetch)
   }
-  const hatchPats={};   // motifs de hachures par type : ROUGE = interdit, ORANGE = passage (créés une fois, réutilisés)
+  const hatchPats={};   // motifs de hachures par type : ROUGE (= sites) = interdit, JAUNE (= marqueurs) = passage (créés une fois, réutilisés)
   function forbiddenHatch(kind){if(hatchPats[kind])return hatchPats[kind];const cv=document.createElement('canvas');cv.width=cv.height=8;const g=cv.getContext('2d');
-    g.strokeStyle=kind==='passage'?'rgba(200,120,30,0.5)':'rgba(150,42,42,0.5)';g.lineWidth=1.4;g.beginPath();g.moveTo(-2,6);g.lineTo(6,-2);g.moveTo(0,8);g.lineTo(8,0);g.moveTo(2,10);g.lineTo(10,2);g.stroke();
+    g.strokeStyle=kind==='passage'?'rgba(176,132,39,0.5)':'rgba(164,36,59,0.5)';g.lineWidth=1.4;g.beginPath();g.moveTo(-2,6);g.lineTo(6,-2);g.moveTo(0,8);g.lineTo(8,0);g.moveTo(2,10);g.lineTo(10,2);g.stroke();
     hatchPats[kind]=fctx.createPattern(cv,'repeat');return hatchPats[kind];}
   // Code pays ISO (alpha-2, minuscule, fourni GRATUITEMENT par Nominatim) → CONTINENT (nom officiel FR).
   // Table 100% hors-ligne (aucune requête). Le Pays vient de la même réponse ; le Continent s'en déduit ici.
@@ -1026,14 +1040,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Sauvegarde SÉPARÉE test/distribuable : la version distribuable démarre TOUJOURS vierge (progression propre),
   // les parties de simulation (test) ne polluent pas ce que verront les vrais joueurs.
   const SAVE_KEY='pas1001_realmap_v3'+(DEV?'':'_prod2');   // _prod2 = remise à zéro de la version distribuable (nouvelle économie d'XP)
-  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',forbAck:false,discR:new Set(),discC:new Set(),discPays:new Set(),discCont:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set()};  // discC = CONTRÉES/cantons ; discPays = PAYS ; discCont = CONTINENTS découverts (grands niveaux)
+  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',forbAck:false,passAck:false,discR:new Set(),discC:new Set(),discPays:new Set(),discCont:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set()};   // forbAck = « ne plus me rappeler » ROUGE ; passAck = ORANGE (séparés : renoncer à l'orange ne masque JAMAIS l'alerte rouge)  // discC = CONTRÉES/cantons ; discPays = PAYS ; discCont = CONTINENTS découverts (grands niveaux)
   const trail=[]; let dirty=false,prevLevel=1,prevTitle=TITLES[0].name;
 
   let saveWarned=false;
   // la sauvegarde de la PROGRESSION est prioritaire : si le stockage est plein, on sacrifie le cache OSM,
   // et si ça échoue encore on PRÉVIENT le joueur (jamais d'échec silencieux → perte de progression)
   function save(){const js=JSON.stringify({
-    C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck,
+    C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck,
     discR:[...state.discR],discC:[...state.discC],discPays:[...state.discPays],discCont:[...state.discCont],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
     try{localStorage.setItem(SAVE_KEY,js);}
     catch(e){purgeOsmCache(0);
@@ -1042,7 +1056,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       catch(e2){if(!saveWarned){saveWarned=true;toast('r','⚠','Sauvegarde impossible','Stockage du navigateur plein ou bloqué');}return;}}
     dirty=false;}
   function applySaved(d){
-    state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;
+    state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;state.passAck=!!d.passAck;
     // discR/compR = ids de ZONES réelles ('c'+id). On ignore les anciennes clés Voronoï ('i,j') des sauvegardes d'avant → compteur exact ; reconcileZones() re-révèle depuis les lieux débloqués.
     (d.discR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.discR.add(k);});(d.discC||[]).forEach(k=>{if(k)state.discC.add(k);});(d.discPays||[]).forEach(k=>{if(k)state.discPays.add(k);});(d.discCont||[]).forEach(k=>{if(k)state.discCont.add(k);});(d.discP||[]).forEach(k=>state.discP.add(k));(d.compR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.compR.add(k);});(d.ach||[]).forEach(k=>state.ach.add(k));(d.visited||[]).forEach(k=>state.visited.add(k));
     const li=levelInfo(state.xp);prevLevel=li.level;prevTitle=titleForLevel(li.level);
@@ -1066,7 +1080,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
   function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
-  function reachPOI(P,Z,silent){if(inForbidden(P.x,P.y))return;   // sécurité : jamais débloquer/récompenser un site situé DANS une zone interdite (quel que soit le chemin de déblocage)
+  function reachPOI(P,Z,silent){const _fz=inForbidden(P.x,P.y);if(_fz&&_fz.kind==='forbidden')return;   // sécurité : jamais débloquer un site dans une zone INTERDITE (rouge) ; en zone de PASSAGE (orange) les sites restent visitables
     state.discP.add(P.id);P.tSeal=performance.now();const gain=tierXP(P);state.xp+=gain;dirty=true;if(window.__wake)__wake(1000); // réveil pour l'anim du sceau
     if(!silent)toast('poi',POI_GLYPH[P.g]||'✦','Site découvert +'+gain+' XP',P.n);
     if(Z&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);const bonus=Z.pois.length*CONFIG.xp.completePerSite;state.xp+=bonus;toast('r','★','Zone complétée !',Z.name+' · +'+bonus+' XP');}
@@ -1309,7 +1323,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=102;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=108;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1480,19 +1494,22 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   addEventListener('pointerdown',function _askN(){try{if('Notification'in window&&Notification.permission==='default')Notification.requestPermission();}catch(_){}removeEventListener('pointerdown',_askN);},{once:true});
   function toast(kind,ic,title,sub){notify(title,sub);}
   // POP-UP PLEIN ÉCRAN d'entrée en zone interdite (bloquant, sûr partout — pas de dépendance aux notifs système). Ne s'affiche pas si l'utilisateur a coché « Ne plus me le rappeler » (ex. quelqu'un qui travaille dans une base).
-  function showFzModal(forb){if(state.forbAck)return;const el=document.getElementById('fzModal');if(!el)return;
-    const pass=!!(forb&&forb.kind==='passage');   // ROUGE = interdit / ORANGE = passage ; texte GÉNÉRIQUE (pas « militaire »)
+  let _fzKind='forbidden';   // type du warning affiché (pour que « Je comprends » coche le BON drapeau)
+  function showFzModal(forb){const pass=!!(forb&&forb.kind==='passage');   // ROUGE = interdit / ORANGE = passage ; texte GÉNÉRIQUE (pas « militaire »)
+    if(pass?state.passAck:state.forbAck)return;   // « ne plus me rappeler » séparé par type
+    const el=document.getElementById('fzModal');if(!el)return;_fzKind=pass?'passage':'forbidden';
     el.classList.remove('k-forbidden','k-passage');el.classList.add(pass?'k-passage':'k-forbidden');
     const ic=document.getElementById('fzIcon'),ti=document.getElementById('fzTitle'),de=document.getElementById('fzDesc'),xp=document.getElementById('fzXp');
     if(ic)ic.textContent=pass?'⚠':'⛔';
     if(ti)ti.textContent=pass?'Zone de passage':'Zone interdite';
     if(de)de.innerHTML=pass
-      ? 'Tu traverses une <b>zone à accès réglementé</b>. Le passage est toléré, mais tu <b>n\'as pas le droit de t\'y attarder</b>.'
+      ? 'Tu entres dans une <b>zone à accès réglementé</b>. Le passage est toléré — <b>reste sur les chemins</b> et respecte les lieux.'
       : 'Tu entres dans une <b>zone à accès restreint</b>. Si tu n\'es pas autorisé à t\'y trouver, <b>quitte les lieux</b>.';
     if(xp)xp.style.display=pass?'none':'';   // règle XP « passage » à définir plus tard → on n'affiche la ligne que pour l'interdit
     el.classList.add('show');}
   (function(){const ok=document.getElementById('fzOk'),box=document.getElementById('fzChkBox'),modal=document.getElementById('fzModal');
-    if(ok)ok.onclick=function(){if(box&&box.checked){state.forbAck=true;dirty=true;try{save();}catch(_){}}if(modal)modal.classList.remove('show');};})();   // « Je comprends » ferme ; case cochée → préférence PERSISTÉE
+    if(ok)ok.onclick=function(){if(box&&box.checked){if(_fzKind==='passage')state.passAck=true;else state.forbAck=true;box.checked=false;dirty=true;try{save();}catch(_){}}if(modal)modal.classList.remove('show');};   // « Je comprends » ferme ; case cochée → coche le drapeau du TYPE affiché (rouge/orange), persisté
+  })();
   // Entrée dans une zone interdite (edge-trigger sur state._forbIn) → pop-up. Appelé au DÉPLACEMENT et quand les données de zone SE CHARGENT (arrivée à ×1000 avant le fetch).
   function checkForbiddenEntry(forb){if(!world)return;if(forb===undefined)forb=inForbidden(state.pl.x,state.pl.y);
     const fid=forb?forb.id:null;
@@ -1586,7 +1603,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function afterMove(){
     const forb=inForbidden(state.pl.x,state.pl.y);   // zone interdite où l'on se trouve (ou null)
     const wantStepXp=Math.floor(state.dist/0.75), sg=wantStepXp-(state.stepXpGiven||0); // 1 pas marché (0,75 m) = 1 XP
-    if(sg>0){if(!forb)state.xp+=sg;state.stepXpGiven=wantStepXp;dirty=true;}   // DANS une zone interdite : les pas sont comptés (distance) mais ne rapportent AUCUN XP
+    if(sg>0){if(!(forb&&forb.kind==='forbidden'))state.xp+=sg;state.stepXpGiven=wantStepXp;dirty=true;}   // XP des pas coupée SEULEMENT en zone INTERDITE (rouge) ; en zone de PASSAGE (orange) les pas rapportent normalement. Distance toujours comptée.
     checkForbiddenEntry(forb);   // ENTRÉE dans une zone interdite → bandeau on-écran + notif
     const lp=trail[trail.length-1];if(!lp||Math.hypot(state.pl.x-lp.x,state.pl.y-lp.y)>=CONFIG.trail.minDist){trail.push({x:state.pl.x,y:state.pl.y});if(trail.length>CONFIG.trail.max)trail.shift();}
     discoverZone(zoneAt(state.pl.x,state.pl.y));
@@ -1937,7 +1954,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         if(Math.max(a.x,bp.x)<-20||Math.min(a.x,bp.x)>W+20||Math.max(a.y,bp.y)<-20||Math.min(a.y,bp.y)>H+20)continue;
         const pass=F.kind==='passage';   // ROUGE = interdit, ORANGE = passage
         fctx.beginPath();for(const r of F.rings){if(r.length<3)continue;const p0=proj(r[0][0],r[0][1]);fctx.moveTo(p0.x,p0.y);for(let i=1;i<r.length;i++){const p=proj(r[i][0],r[i][1]);fctx.lineTo(p.x,p.y);}fctx.closePath();}
-        fctx.fillStyle=pass?'rgba(200,120,30,0.12)':'rgba(150,42,42,0.12)';fctx.fill();fctx.fillStyle=forbiddenHatch(pass?'passage':'forbidden');fctx.fill();   // fond léger + hachures (couleur du type)
+        fctx.fillStyle=pass?'rgba(176,132,39,0.12)':'rgba(164,36,59,0.12)';fctx.fill();fctx.fillStyle=forbiddenHatch(pass?'passage':'forbidden');fctx.fill();   // fond léger + hachures (couleur du type)
         fctx.strokeStyle=pass?'rgba(180,100,20,0.85)':'rgba(120,32,32,0.85)';fctx.lineWidth=1.8;fctx.lineJoin='round';fctx.stroke();}                          // liseré (couleur du type)
       fctx.restore();}}
     fctx.textAlign='center';fctx.textBaseline='middle';
