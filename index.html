@@ -1323,7 +1323,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=108;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=112;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1473,7 +1473,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function setLocation(lng,lat){const C=[lng,lat];
     initWorld(C);
     state.pl.x=0;state.pl.y=0;state.xp=0;state.dist=0;state.stepXpGiven=0;state.discR.clear();state.discC.clear();state.discPays.clear();state.discCont.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();discToastNames.clear();
-    trail.length=0;prevLevel=1;prevTitle=TITLES[0].name;control.target=null;lastFetch=null;
+    trail.length=0;prevLevel=1;prevTitle=TITLES[0].name;control.target=null;lastFetch=null;state.hvx=state.hvy=undefined;state._hsamp=null;
     clearRoute();tip=null;curPOI=null;poiPanel.classList.remove('open'); // rien ne doit pointer vers l'ancien monde
     follow=true;recenterBtn.classList.remove('show');
     map.setCenter(C);map.setZoom(CONFIG.defaultZoom);hint.classList.remove('gone');
@@ -1614,6 +1614,15 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       if(dm<CONFIG.route.arrive){toast('r','◈','Destination atteinte',route.name);clearRoute();}
       else if(route.ffx!=null&&Math.hypot(state.pl.x-route.ffx,state.pl.y-route.ffy)>30)doRouteFetch();} // réajuste depuis la position
     if(state.dist>40)hint.classList.add('gone'); // le bandeau d'accueil disparaît après les premiers vrais pas
+    // CAP (direction de déplacement) — alimente la flèche de l'avatar ; partagé SIM (clic-cible) + VRAI GPS.
+    // On échantillonne tous les ≥1,5 m et on lisse le vecteur cap (monde, +y = nord) → aiguille stable, pas nerveuse.
+    { const hs=state._hsamp;
+      if(hs){ const hx=state.pl.x-hs.x, hy=state.pl.y-hs.y, hm=Math.hypot(hx,hy);
+        if(hm>=1.5){ const nx=hx/hm, ny=hy/hm;
+          if(state.hvx===undefined){state.hvx=nx;state.hvy=ny;}
+          else{ let vx=state.hvx+(nx-state.hvx)*0.3, vy=state.hvy+(ny-state.hvy)*0.3, vm=Math.hypot(vx,vy)||1; state.hvx=vx/vm; state.hvy=vy/vm; }
+          state._hsamp={x:state.pl.x,y:state.pl.y}; } }
+      else state._hsamp={x:state.pl.x,y:state.pl.y}; }
     maybeFetchArea();
   }
   function update(dt){
@@ -1683,6 +1692,25 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     g.restore();}
   // Emblème du joueur : sceau de cire OR (couleur des marqueurs) au MÊME bord irrégulier que les sites, SANS filet crème.
   // Par défaut = SILHOUETTE de personnage ; si photo de profil = photo clippée dans le sceau or.
+  // Flèche de direction — cimier « ACCOLADE ARDENTE » (design retenu par Étienne après concours
+  // 6 pistes + jury) : ogive gothique PLEINE qui coiffe la jante du sceau et jaillit en pointe dans
+  // le sens de marche. Or de la cire (#B08427) + relief or profond, filet crème près de la pointe.
+  // DÉTACHÉE du bord (scale 1.10 ≈ filet de parchemin de ~2,5 px) sinon or-sur-or = illisible à 42 px.
+  // Path en espace « jante = rayon 21 » ; symétrique sur +x ; l'angle vient de `proj` (2 points
+  // monde) → suivra AUSSI la rotation de la carte (étape 2).
+  const FLECHE_P=new Path2D('M 9.2 19.7 C 14 18.4 19.8 15.3 23.3 11.5 C 25.4 9.2 25.5 1.2 31 0 C 25.5 -1.2 25.4 -9.2 23.3 -11.5 C 19.8 -15.3 14 -18.4 9.2 -19.7 C 16.8 -16.1 21.7 -8.4 21.7 0 C 21.7 8.4 16.8 16.1 9.2 19.7 Z');
+  const FLECHE_H=new Path2D('M 23.6 7.8 C 25 5 26.5 2.5 28.6 0 C 26.5 -2.5 25 -5 23.6 -7.8');
+  function drawHeadingArrow(x,y,r){
+    if(state.hvx===undefined)return;                                   // pas encore bougé → pas de cimier
+    const e=8, a=proj(state.pl.x,state.pl.y), b=proj(state.pl.x+state.hvx*e,state.pl.y+state.hvy*e);
+    const ang=Math.atan2(b.y-a.y,b.x-a.x);
+    const g=fctx;g.save();g.translate(x,y);g.rotate(ang);g.scale(r/21*1.10,r/21*1.10);  // +x local = cap ; détaché de la jante
+    g.save();g.translate(0.7,0.9);g.fillStyle='#6f4c0d';g.fill(FLECHE_P);g.restore();   // épaisseur (même ombre que le sceau)
+    g.fillStyle='#B08427';g.fill(FLECHE_P);                                             // cire OR (= sceau + marqueurs)
+    g.lineJoin='round';g.lineWidth=1.7;g.strokeStyle='#6f4c0d';g.stroke(FLECHE_P);      // contour or profond
+    g.lineCap='round';g.lineWidth=1.8;g.strokeStyle='rgba(250,242,220,0.9)';g.stroke(FLECHE_H); // filet crème (ogive intérieure)
+    g.restore();
+  }
   function drawPlayerEmblem(x,y,r){
     const px=2*r*24/19;   // boîte SVG (cire = 19u) → cire visible = 2r px
     if(!avatarImg){const img=playerImg(true);
@@ -2059,6 +2087,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(control.target){const c=proj(control.target.x,control.target.y),pu=noMotion?0:2*Math.sin(t*0.006);fctx.strokeStyle='rgba(120,84,40,.6)';fctx.lineWidth=1.5;fctx.beginPath();fctx.arc(c.x,c.y,9+pu,0,TAU);fctx.stroke();}
     // emblème du joueur : sceau de cire OR à silhouette (halo de lumière retiré, demande Étienne)
     if(z<4)blob(PS.x,PS.y,110,'232,185,60',0.32); // vue planète : clairière d'or sur « vos terres » (repérage au dézoom extrême)
+    drawHeadingArrow(PS.x,PS.y,21);   // aiguille de direction (sous le sceau, pointe à l'extérieur)
     drawPlayerEmblem(PS.x,PS.y,21);
     // infobulle « marche jusqu'à ce lieu »
     if(tip){if(now>tip.until)tip=null;else{const tp=proj(tip.x,tip.y),msg='Marche jusqu\'à ce site pour le découvrir';
