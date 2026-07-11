@@ -188,6 +188,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   .pp-title{font-family:var(--display);font-size:19px;font-weight:700;color:#2f1f0c;text-align:center;letter-spacing:2px;margin-top:2px;}
   .pg-zonename{font-family:var(--display);font-size:17px;font-weight:700;color:#2f1f0c;text-align:center;margin-top:5px;}
   .pg-zonename .pz-star{color:var(--rouge);}
+  .pg-zonename .pz-contree{display:block;font-size:10px;font-weight:600;color:var(--or);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:1px;opacity:.92;}  /* CONTRÉE = surtitre or au-dessus du nom de zone */
   .pg-zonesub{text-align:center;font-size:11.5px;color:#7c5a17;margin-top:3px;font-variant-numeric:tabular-nums;letter-spacing:.5px;}
   .pg-total{height:7px;border-radius:4px;background:rgba(74,52,33,.16);overflow:hidden;margin:11px 0 8px;}
   .pg-total i{display:block;height:100%;width:0;background:linear-gradient(90deg,#B98A2E,#A4243B);border-radius:4px;transition:width .5s ease;}
@@ -761,7 +762,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!rings.length)return null;
     let bb=[1e18,1e18,-1e18,-1e18];for(const r of rings){const b=ringBB(r);bb=[Math.min(bb[0],b[0]),Math.min(bb[1],b[1]),Math.max(bb[2],b[2]),Math.max(bb[3],b[3])];}
     let big=null,bigA=-1,area=0;for(const r of rings){const c=ringCentroid(r);if(!c)continue;area+=c.area;if(c.area>bigA){bigA=c.area;big=c;}}
-    return {id:raw.id,name:raw.name,lvl:raw.lvl||8,rings:rings,bb:bb,cx:big?big.x:(bb[0]+bb[2])/2,cy:big?big.y:(bb[1]+bb[3])/2,area:area||1};}
+    return {id:raw.id,name:raw.name,lvl:raw.lvl||8,contree:raw.contree||'',rings:rings,bb:bb,cx:big?big.x:(bb[0]+bb[2])/2,cy:big?big.y:(bb[1]+bb[3])/2,area:area||1};}
   function ingestZoneRaw(raw){if(!world||!raw)return;
     if(!world._commIds.has(raw.id)){const z=buildZone(raw);if(!z)return;
       z.discovered=state.discR.has(z.id);z.rev=z.discovered?0:1;z.pois=[];
@@ -770,16 +771,16 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Cache global (lng/lat, ré-projeté à l'ouverture) → contrées déjà visitées ré-apparaissent instantanément, même hors-ligne
   const ZCACHE_KEY='pas1001_zones_v1',ZCACHE_MAX=80;
   function zoneCacheRead(){try{return JSON.parse(localStorage.getItem(ZCACHE_KEY)||'{}')||{};}catch(e){return {};}}
-  function zoneCacheAdd(raw){try{const m=zoneCacheRead();m[raw.id]={name:raw.name,lvl:raw.lvl,poly:raw.poly,ts:Date.now()};
+  function zoneCacheAdd(raw){try{const m=zoneCacheRead();m[raw.id]={name:raw.name,lvl:raw.lvl,poly:raw.poly,contree:raw.contree||'',ts:Date.now()};
     const ids=Object.keys(m);if(ids.length>ZCACHE_MAX){ids.sort((a,b)=>(m[a].ts||0)-(m[b].ts||0));for(let i=0;i<ids.length-ZCACHE_MAX;i++)delete m[ids[i]];}
     localStorage.setItem(ZCACHE_KEY,JSON.stringify(m));}catch(e){}}
-  function loadZoneCache(){const m=zoneCacheRead();for(const id in m){const c=m[id];ingestZoneRaw({id:id,name:c.name,lvl:c.lvl,poly:c.poly});}}
+  function loadZoneCache(){const m=zoneCacheRead();for(const id in m){const c=m[id];ingestZoneRaw({id:id,name:c.name,lvl:c.lvl,poly:c.poly,contree:c.contree||''});}}
   function nominatimToRaw(d){if(!d||!d.geojson||!d.osm_id)return null;const g=d.geojson;let poly=null;
     if(g.type==='Polygon')poly=g.coordinates;
     else if(g.type==='MultiPolygon'){poly=[];for(const pg of g.coordinates)for(const ring of pg)poly.push(ring);}
     if(!poly||!poly.length)return null; // Point (pas de polygone) → on ignore, on retentera
     const ad=d.address||{};
-    return {id:'c'+d.osm_id,name:d.name||ad.city||ad.town||ad.village||ad.municipality||'Zone',lvl:+((d.extratags||{}).admin_level)||8,poly:poly};}
+    return {id:'c'+d.osm_id,name:d.name||ad.city||ad.town||ad.village||ad.municipality||'Zone',lvl:+((d.extratags||{}).admin_level)||8,poly:poly,contree:ad.county||ad.state_district||ad.state||ad.region||''};}  // contree = le GRAND niveau réel (département/région), déjà fourni par Nominatim (zéro requête en plus)
   let zonePending=false,lastZoneTry=0;
   function reverseZone(lng,lat){if(zonePending)return;
     if(!isFinite(lat)||lat>90||lat<-90||!isFinite(lng)||lng>180||lng<-180)return; // coords invalides → on ne bloque pas
@@ -890,7 +891,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Sauvegarde SÉPARÉE test/distribuable : la version distribuable démarre TOUJOURS vierge (progression propre),
   // les parties de simulation (test) ne polluent pas ce que verront les vrais joueurs.
   const SAVE_KEY='pas1001_realmap_v3'+(DEV?'':'_prod2');   // _prod2 = remise à zéro de la version distribuable (nouvelle économie d'XP)
-  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',discR:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set()};
+  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',discR:new Set(),discC:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set()};  // discC = CONTRÉES découvertes (grand niveau)
   const trail=[]; let dirty=false,prevLevel=1,prevTitle=TITLES[0].name;
 
   let saveWarned=false;
@@ -898,7 +899,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // et si ça échoue encore on PRÉVIENT le joueur (jamais d'échec silencieux → perte de progression)
   function save(){const js=JSON.stringify({
     C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo,
-    discR:[...state.discR],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
+    discR:[...state.discR],discC:[...state.discC],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
     try{localStorage.setItem(SAVE_KEY,js);}
     catch(e){purgeOsmCache(0);
       try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(k.indexOf('pas1001_comm')===0||k.indexOf('pas1001_zones')===0))localStorage.removeItem(k);}}catch(_){} // en dernier recours, sacrifie aussi le cache des contrées/zones
@@ -908,7 +909,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function applySaved(d){
     state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';
     // discR/compR = ids de ZONES réelles ('c'+id). On ignore les anciennes clés Voronoï ('i,j') des sauvegardes d'avant → compteur exact ; reconcileZones() re-révèle depuis les lieux débloqués.
-    (d.discR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.discR.add(k);});(d.discP||[]).forEach(k=>state.discP.add(k));(d.compR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.compR.add(k);});(d.ach||[]).forEach(k=>state.ach.add(k));(d.visited||[]).forEach(k=>state.visited.add(k));
+    (d.discR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.discR.add(k);});(d.discC||[]).forEach(k=>{if(k)state.discC.add(k);});(d.discP||[]).forEach(k=>state.discP.add(k));(d.compR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.compR.add(k);});(d.ach||[]).forEach(k=>state.ach.add(k));(d.visited||[]).forEach(k=>state.visited.add(k));
     const li=levelInfo(state.xp);prevLevel=li.level;prevTitle=titleForLevel(li.level);
     const cs=document.getElementById('csPseudo');if(cs)cs.value=state.pseudo;
   }
@@ -924,6 +925,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Zone découverte »)
   function discoverZone(Z){if(!Z)return;loadZoneSites(Z); // vivier COMPLET de la commune où l'on entre/est (zone COURANTE uniquement → pas de rafale de fetch sur TOUTES les communes déjà découvertes)
     if(state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true;if(window.__wake)__wake(3800); // découvrir une contrée = 0 XP ; réveil pour l'anim (brume + houppes + sceaux)
+    if(Z.contree&&!state.discC.has(Z.contree)){state.discC.add(Z.contree);toast('r','◈','Contrée découverte',Z.contree);}  // GRAND niveau : la région se nomme au 1er passage (persistée → jamais re-toastée)
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
   function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
@@ -1168,7 +1170,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=77;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=78;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1189,7 +1191,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         : (world._zsDone&&world._zsDone.has(Z.id)) ? 'échec réseau ✗' : 'en attente';
       diag=' · '+raw+' recensés · '+zst;
     }
-    nEl.innerHTML=escHtml(Z.name)+(done?' <span class="pz-star">★</span>':'');
+    nEl.innerHTML=(Z.contree?'<span class="pz-contree">'+escHtml(Z.contree)+'</span>':'')+escHtml(Z.name)+(done?' <span class="pz-star">★</span>':'');  // en-tête 2 niveaux : Contrée (petit, au-dessus) › Zone (grand)
     const pctz=tot?Math.round(got/tot*100):100;
     sEl.textContent=got+' / '+tot+' sites · '+pctz+' %'+diag;
     bEl.style.width=pctz+'%';
