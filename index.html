@@ -244,6 +244,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #markerPop .mp-s{font-size:10.5px;color:var(--inkSoft);font-style:italic;}
   #markerPop .mp-row{display:flex;gap:8px;}
   #markerPop .mp-row .tg2{flex:1;}
+  #markerPop .mp-name{appearance:none;width:100%;box-sizing:border-box;background:rgba(250,242,220,.6);border:1px solid rgba(74,52,33,.35);border-radius:6px;padding:5px 8px;font-family:var(--display);font-size:13px;color:var(--ink);}
+  #markerPop .mp-name::placeholder{color:var(--inkSoft);opacity:.8;}
+  #markerPop .mp-name:focus{outline:none;border-color:var(--rouge);background:rgba(250,242,220,.85);}
+  #markerPop .mp-types{display:flex;gap:4px;}
+  #markerPop .mp-ic{appearance:none;flex:1;aspect-ratio:1;display:grid;place-items:center;background:rgba(250,242,220,.4);border:1px solid rgba(74,52,33,.3);border-radius:6px;padding:3px;cursor:pointer;transition:transform .12s cubic-bezier(.2,.8,.3,1),border-color .12s,background .12s;}
+  #markerPop .mp-ic.on{background:rgba(176,132,39,.22);border-color:var(--or);}
+  #markerPop .mp-ic:active{transform:scale(.88);}
+  #markerPop .mp-ic svg{width:100%;height:100%;display:block;}
 
   /* ── barre d'itinéraire ── */
   #routeBar{bottom:0;left:0;right:0;transform:none;display:none;align-items:center;gap:12px;box-sizing:border-box;
@@ -1026,7 +1034,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const MARKERS_KEY='pas1001_markers'+(DEV?'':'_prod2');
   let markers=[];
   function loadMarkers(){try{const a=JSON.parse(localStorage.getItem(MARKERS_KEY)||'[]');markers=Array.isArray(a)?a.filter(m=>m&&isFinite(m.lng)&&isFinite(m.lat)):[];}catch(_){markers=[];}}
-  function saveMarkers(){try{localStorage.setItem(MARKERS_KEY,JSON.stringify(markers.map(function(m){return {id:m.id,lng:m.lng,lat:m.lat,type:m.type,ts:m.ts};})));}catch(_){}}  // on ne persiste PAS l'état d'anim transitoire (_pop)
+  function saveMarkers(){try{localStorage.setItem(MARKERS_KEY,JSON.stringify(markers.map(function(m){return {id:m.id,lng:m.lng,lat:m.lat,type:m.type,ts:m.ts,name:m.name||undefined};})));}catch(_){}}  // persiste id/pos/type/nom ; PAS l'état d'anim transitoire (_pop)
   loadMarkers();
   function svgFor(path,col){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+path+'" fill="none" stroke="'+col+'" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';}
   const wheelEl=()=>document.getElementById('markerWheel');
@@ -1099,12 +1107,19 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const dx=p.x-px,dy=(p.y-21*MK_PX)-py,d=dx*dx+dy*dy;if(d<bd){bd=d;best=mk;}}return best;} // corps du repère = 21×MK_PX px au-dessus du point
   const markerPop=()=>document.getElementById('markerPop');
   function closeMarkerPop(){const p=markerPop();if(p)p.classList.remove('show');}
-  function openMarkerPop(mk){const p=markerPop();if(!p)return;let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){return;}
+  function openMarkerPop(mk){const p=markerPop();if(!p)return;let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){return;}   // escHtml() = fonction hoistée définie plus bas
     const m=world?lngLatToM(mk.lng,mk.lat):null,pas=m?pasFrom(m.x,m.y):null;
-    p.innerHTML=(pas!=null?'<div class="mp-s">≈ '+pas.toLocaleString('fr-FR')+' pas d\'ici</div>':'')+
+    const label=MARKER_LABEL[mk.type]||'Repère';
+    const types=MARKER_TYPES.map(t=>'<button class="mp-ic'+(t.k===mk.type?' on':'')+'" data-t="'+t.k+'" title="'+t.n+'" aria-label="'+t.n+'">'+svgFor(MGLYPHS[t.k],MARKER_GOLD)+'</button>').join('');
+    p.innerHTML='<input class="mp-name" id="mpName" maxlength="40" value="'+(mk.name?escHtml(mk.name):'')+'" placeholder="'+escHtml(label)+'">'+
+      '<div class="mp-types" id="mpTypes">'+types+'</div>'+
+      (pas!=null?'<div class="mp-s">≈ '+pas.toLocaleString('fr-FR')+' pas d\'ici</div>':'')+
       '<div class="mp-row"><button class="tg2" id="mpRoute">Itinéraire</button><button class="tg2 danger" id="mpDel">Supprimer</button></div>';
-    p.style.left=Math.max(8,Math.min(W-168,mp.x-78))+'px';p.style.top=Math.max(8,mp.y-96)+'px';p.classList.add('show');
-    document.getElementById('mpRoute').onclick=()=>{const mm=lngLatToM(mk.lng,mk.lat);setRoute(mm.x,mm.y,MARKER_LABEL[mk.type]||'Repère');closeMarkerPop();};
+    p.style.left=Math.max(8,Math.min(W-178,mp.x-83))+'px';p.style.top=Math.max(8,mp.y-124)+'px';p.classList.add('show');
+    const nameEl=document.getElementById('mpName');
+    nameEl.addEventListener('input',()=>{mk.name=nameEl.value.trim()||undefined;saveMarkers();if(window.__wake)__wake(500);});   // RENOMMER : le libellé se met à jour EN DIRECT sur la carte
+    p.querySelectorAll('.mp-ic').forEach(b=>{b.onclick=()=>{mk.type=b.getAttribute('data-t');saveMarkers();if(window.__wake)__wake(700);openMarkerPop(mk);};});  // ÉDITER LE TYPE : change l'icône du repère
+    document.getElementById('mpRoute').onclick=()=>{const mm=lngLatToM(mk.lng,mk.lat);setRoute(mm.x,mm.y,mk.name||label);closeMarkerPop();};
     document.getElementById('mpDel').onclick=()=>{markers=markers.filter(x=>x.id!==mk.id);saveMarkers();closeMarkerPop();};}
   // clic long (souris/tactile) sans bouger = ouvrir la roue.
   // ⚠️ CLÉ ANTI-GEL : le maintien ARME l'ouverture (450 ms immobile), mais la roue s'ouvre au RELÂCHER du doigt (pointerup).
@@ -1153,7 +1168,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=74;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=75;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1742,6 +1757,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         fctx.save();fctx.globalAlpha=al;fctx.translate(mp.x,mp.y);fctx.scale(sc,sc);fctx.translate(-mp.x,-mp.y);drawMk();fctx.restore();
         if(window.__wake)__wake(120);
       } else drawMk();
+      if(mk.name){const la=(age>=0&&age<POP)?Math.min(1,age/150):1;      // NOM du repère sous la pointe (halo crème + encre, Cinzel)
+        fctx.save();fctx.globalAlpha=la;fctx.font='600 10.5px '+FONT_DISPLAY;fctx.textAlign='center';fctx.textBaseline='top';fctx.lineJoin='round';
+        fctx.lineWidth=2.8;fctx.strokeStyle='rgba(242,232,206,0.92)';fctx.strokeText(mk.name,mp.x,mp.y+4);
+        fctx.fillStyle='#5c4321';fctx.fillText(mk.name,mp.x,mp.y+4);fctx.restore();}
     }}
     const PS=proj(state.pl.x,state.pl.y);
     // itinéraire : PERSONNAGE → cible, suit les VRAIES routes (poly OSRM), la portion déjà faite disparaît
