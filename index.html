@@ -767,7 +767,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!world._commIds.has(raw.id)){const z=buildZone(raw);if(!z)return;
       z.discovered=state.discR.has(z.id);z.rev=z.discovered?0:1;z.pois=[];
       world._commIds.add(z.id);world.communes.push(z);world._zoneById.set(z.id,z);reindexPois();}
-    revealStart();reconcileZones();} // dévoile la contrée où l'on se trouve
+    else{const ez=world._zoneById.get(raw.id);if(ez&&!ez.contree&&raw.contree)ez.contree=raw.contree;} // zone déjà chargée SANS Contrée (vieux cache) → on la BACKFILLE
+    revealStart();reconcileZones();} // dévoile la zone où l'on se trouve
   // Cache global (lng/lat, ré-projeté à l'ouverture) → contrées déjà visitées ré-apparaissent instantanément, même hors-ligne
   const ZCACHE_KEY='pas1001_zones_v1',ZCACHE_MAX=80;
   function zoneCacheRead(){try{return JSON.parse(localStorage.getItem(ZCACHE_KEY)||'{}')||{};}catch(e){return {};}}
@@ -790,12 +791,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     function finish(){if(done)return;done=true;clearTimeout(to);zonePending=false;osmPending=Math.max(0,osmPending-1);if(osmPending<=0)setLoading(false);}
     const to=setTimeout(function(){try{if(ctrl)ctrl.abort();}catch(_){}finish();},12000);
     fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&polygon_geojson=1&zoom=10&lat='+lat+'&lon='+lng,{headers:{'Accept':'application/json'},signal:ctrl?ctrl.signal:undefined})
-      .then(r=>r.ok?r.json():Promise.reject()).then(d=>{const raw=nominatimToRaw(d);if(raw){ingestZoneRaw(raw);zoneCacheAdd(raw);const zz=world._zoneById.get(raw.id);if(zz)discoverZone(zz);}}) // reverse = la contrée où l'on EST → on la découvre DIRECT (fiable même au ras du bord, sans re-tester mon polygone approximé)
+      .then(r=>r.ok?r.json():Promise.reject()).then(d=>{const raw=nominatimToRaw(d);if(raw){ingestZoneRaw(raw);zoneCacheAdd(raw);const zz=world._zoneById.get(raw.id);if(zz){zz._contreeTried=true;discoverZone(zz);}}}) // reverse = la zone+Contrée où l'on EST → découverte DIRECTE (fiable même au ras du bord)
       .catch(()=>{}).then(finish);}
   // Dès qu'on n'est PAS dans une contrée déjà chargée → on va chercher sa vraie forme (throttle + anti-doublon)
   function ensureZone(){if(!world||zonePending)return;
     if(!DEV&&geoFirst)return; // distribuable : AUCUNE découverte tant qu'on n'a pas un VRAI relevé GPS (sinon on révèle le centre par défaut = « contrée fantôme »)
-    if(zoneAt(state.pl.x,state.pl.y))return;
+    const Z0=zoneAt(state.pl.x,state.pl.y);
+    if(Z0&&(Z0.contree||Z0._contreeTried))return; // dans une zone qui connaît DÉJÀ sa Contrée (ou déjà tentée) → rien ; sinon on (re)interroge pour BACKFILLER la Contrée (joueur existant, cache d'avant)
     const now=performance.now();if(now-lastZoneTry<1500)return;lastZoneTry=now;
     const ll=mToLngLat(state.pl.x,state.pl.y);reverseZone(ll[0],ll[1]);}
   // ---- Lieux + noms de quartiers INSTANTANÉS depuis les tuiles vectorielles déjà chargées (zéro attente réseau) ----
@@ -924,8 +926,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const discToastNames=new Set(); // pour ne pas répéter « Zone découverte » pour un même nom
   // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Zone découverte »)
   function discoverZone(Z){if(!Z)return;loadZoneSites(Z); // vivier COMPLET de la commune où l'on entre/est (zone COURANTE uniquement → pas de rafale de fetch sur TOUTES les communes déjà découvertes)
-    if(state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true;if(window.__wake)__wake(3800); // découvrir une contrée = 0 XP ; réveil pour l'anim (brume + houppes + sceaux)
-    if(Z.contree&&!state.discC.has(Z.contree)){state.discC.add(Z.contree);toast('r','◈','Contrée découverte',Z.contree);}  // GRAND niveau : la région se nomme au 1er passage (persistée → jamais re-toastée)
+    if(Z.contree&&!state.discC.has(Z.contree)){state.discC.add(Z.contree);dirty=true;toast('r','◈','Contrée découverte',Z.contree);if(window.__wake)__wake(1600);}  // GRAND niveau — AVANT le guard : se déclenche AUSSI au backfill d'une zone déjà découverte (persistée → jamais re-toastée)
+    if(state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true;if(window.__wake)__wake(3800); // découvrir une zone = 0 XP ; réveil pour l'anim (brume + houppes + sceaux)
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
   function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
@@ -1170,7 +1172,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=78;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=79;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1191,7 +1193,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         : (world._zsDone&&world._zsDone.has(Z.id)) ? 'échec réseau ✗' : 'en attente';
       diag=' · '+raw+' recensés · '+zst;
     }
-    nEl.innerHTML=(Z.contree?'<span class="pz-contree">'+escHtml(Z.contree)+'</span>':'')+escHtml(Z.name)+(done?' <span class="pz-star">★</span>':'');  // en-tête 2 niveaux : Contrée (petit, au-dessus) › Zone (grand)
+    const showC=Z.contree&&Z.contree.toLowerCase()!==(Z.name||'').toLowerCase();  // pas de doublon si la Contrée porte le même nom que la Zone
+    nEl.innerHTML=(showC?'<span class="pz-contree">'+escHtml(Z.contree)+'</span>':'')+escHtml(Z.name)+(done?' <span class="pz-star">★</span>':'');  // en-tête 2 niveaux : Contrée (petit, au-dessus) › Zone (grand)
     const pctz=tot?Math.round(got/tot*100):100;
     sEl.textContent=got+' / '+tot+' sites · '+pctz+' %'+diag;
     bEl.style.width=pctz+'%';
