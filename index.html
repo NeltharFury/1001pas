@@ -1173,7 +1173,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=81;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=82;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1646,6 +1646,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     fctx.strokeStyle='rgba(74,52,33,'+(0.5*av)+')';fctx.lineWidth=0.6;rrect(fctx,cx-w/2,cy-h/2,w,h,h/2);fctx.stroke();
     ornament(cx-w/2-6,cy,-1,av);ornament(cx+w/2+6,cy,1,av);
     fctx.fillStyle='rgba(53,36,15,'+(0.96*av)+')';fctx.fillText(label,cx,cy+0.5);fctx.letterSpacing='0px';}
+  // GRAND cartouche de CONTRÉE (grand niveau) : plus large, liseré OR + double filet → « carte de provinces » au dézoom
+  function cartoucheContree(cx,cy,label,av){if(av<=0)return;fctx.font='700 16px '+FONT_DISPLAY;fctx.letterSpacing='4px';
+    const tw=fctx.measureText(label).width,w=tw+44,h=32;
+    fctx.fillStyle='rgba(243,231,198,'+(0.93*av)+')';rrect(fctx,cx-w/2,cy-h/2,w,h,h/2);fctx.fill();
+    fctx.strokeStyle='rgba(185,138,46,'+(0.9*av)+')';fctx.lineWidth=1.5;rrect(fctx,cx-w/2,cy-h/2,w,h,h/2);fctx.stroke();        // liseré OR
+    fctx.strokeStyle='rgba(74,52,33,'+(0.38*av)+')';fctx.lineWidth=0.6;rrect(fctx,cx-w/2+2.5,cy-h/2+2.5,w-5,h-5,(h-5)/2);fctx.stroke(); // filet d'encre intérieur
+    ornament(cx-w/2-9,cy,-1,av);ornament(cx+w/2+9,cy,1,av);
+    fctx.fillStyle='rgba(53,36,15,'+(0.96*av)+')';fctx.fillText(label,cx,cy+0.5);fctx.letterSpacing='0px';}
   function pill(cx,cy,label){fctx.font='700 9.5px '+FONT_DISPLAY;const tw=fctx.measureText(label).width,w=tw+22,h=18;
     fctx.fillStyle='rgba(243,231,198,0.95)';rrect(fctx,cx-w/2,cy-h/2,w,h,9);fctx.fill();
     fctx.strokeStyle='rgba(138,106,58,0.9)';fctx.lineWidth=0.8;rrect(fctx,cx-w/2,cy-h/2,w,h,9);fctx.stroke();
@@ -1732,6 +1740,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     for(const Z of dz){const av=1-Z.rev;const c=proj(Z.cx,Z.cy);
       if(z>=12&&c.x>-160&&c.x<W+160&&c.y>-40&&c.y<H+40&&!shownNames.has(Z.name)){shownNames.add(Z.name);
         cartouche(c.x,c.y,Z.name.toUpperCase()+(state.compR.has(Z.id)?' ★':''),av);}} // masqués au fort dézoom (illisibles)
+    // 1bis) CONTRÉES au DÉZOOM : sous z<12 (noms de communes cachés), le nom de chaque Contrée explorée apparaît en GRAND cartouche or, au CŒUR de son territoire exploré → « carte de provinces » (100% vraies données, aucune requête)
+    if(z<12&&z>3.8){const cg={};
+      for(const Zc of world.communes){if(!Zc.discovered||!Zc.contree)continue;const g=cg[Zc.contree]||(cg[Zc.contree]={sx:0,sy:0,n:0});g.sx+=Zc.cx;g.sy+=Zc.cy;g.n++;}
+      const fade=clamp((11.8-z)/1.3,0,1)*clamp((z-3.9)/0.7,0,1);   // apparaît en dézoomant sous ~11.8, s'efface avant la vue planète (z<4)
+      if(fade>0.01)for(const nm in cg){const g=cg[nm],c=proj(g.sx/g.n,g.sy/g.n);
+        if(c.x>-240&&c.x<W+240&&c.y>-60&&c.y<H+60)cartoucheContree(c.x,c.y,nm.toUpperCase(),fade);}}
     // 2) sceaux/verrous des sites (TOUJOURS dessinés) + collecte des étiquettes candidates
     const nameCands=[];
     if(z>=13.3)for(const Z of dz){const av=1-Z.rev;
