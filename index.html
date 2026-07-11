@@ -763,26 +763,26 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!rings.length)return null;
     let bb=[1e18,1e18,-1e18,-1e18];for(const r of rings){const b=ringBB(r);bb=[Math.min(bb[0],b[0]),Math.min(bb[1],b[1]),Math.max(bb[2],b[2]),Math.max(bb[3],b[3])];}
     let big=null,bigA=-1,area=0;for(const r of rings){const c=ringCentroid(r);if(!c)continue;area+=c.area;if(c.area>bigA){bigA=c.area;big=c;}}
-    return {id:raw.id,name:raw.name,lvl:raw.lvl||8,contree:raw.contree||'',rings:rings,bb:bb,cx:big?big.x:(bb[0]+bb[2])/2,cy:big?big.y:(bb[1]+bb[3])/2,area:area||1};}
+    return {id:raw.id,name:raw.name,lvl:raw.lvl||8,contree:raw.contree||'',contreeV:raw.contreeV||0,rings:rings,bb:bb,cx:big?big.x:(bb[0]+bb[2])/2,cy:big?big.y:(bb[1]+bb[3])/2,area:area||1};}
   function ingestZoneRaw(raw){if(!world||!raw)return;
     if(!world._commIds.has(raw.id)){const z=buildZone(raw);if(!z)return;
       z.discovered=state.discR.has(z.id);z.rev=z.discovered?0:1;z.pois=[];
       world._commIds.add(z.id);world.communes.push(z);world._zoneById.set(z.id,z);reindexPois();}
-    else{const ez=world._zoneById.get(raw.id);if(ez&&!ez.contree&&raw.contree)ez.contree=raw.contree;} // zone déjà chargée SANS Contrée (vieux cache) → on la BACKFILLE
+    else{const ez=world._zoneById.get(raw.id);if(ez&&raw.contree&&(!ez.contree||(ez.contreeV||0)<(raw.contreeV||0))){ez.contree=raw.contree;ez.contreeV=raw.contreeV||0;}} // zone déjà chargée : BACKFILL si sans Contrée, ou UPGRADE si l'ancien schéma (< canton)
     revealStart();reconcileZones();} // dévoile la zone où l'on se trouve
   // Cache global (lng/lat, ré-projeté à l'ouverture) → contrées déjà visitées ré-apparaissent instantanément, même hors-ligne
   const ZCACHE_KEY='pas1001_zones_v1',ZCACHE_MAX=80;
   function zoneCacheRead(){try{return JSON.parse(localStorage.getItem(ZCACHE_KEY)||'{}')||{};}catch(e){return {};}}
-  function zoneCacheAdd(raw){try{const m=zoneCacheRead();m[raw.id]={name:raw.name,lvl:raw.lvl,poly:raw.poly,contree:raw.contree||'',ts:Date.now()};
+  function zoneCacheAdd(raw){try{const m=zoneCacheRead();m[raw.id]={name:raw.name,lvl:raw.lvl,poly:raw.poly,contree:raw.contree||'',contreeV:raw.contreeV||0,ts:Date.now()};
     const ids=Object.keys(m);if(ids.length>ZCACHE_MAX){ids.sort((a,b)=>(m[a].ts||0)-(m[b].ts||0));for(let i=0;i<ids.length-ZCACHE_MAX;i++)delete m[ids[i]];}
     localStorage.setItem(ZCACHE_KEY,JSON.stringify(m));}catch(e){}}
-  function loadZoneCache(){const m=zoneCacheRead();for(const id in m){const c=m[id];ingestZoneRaw({id:id,name:c.name,lvl:c.lvl,poly:c.poly,contree:c.contree||''});}}
+  function loadZoneCache(){const m=zoneCacheRead();for(const id in m){const c=m[id];ingestZoneRaw({id:id,name:c.name,lvl:c.lvl,poly:c.poly,contree:c.contree||'',contreeV:c.contreeV||0});}}
   function nominatimToRaw(d){if(!d||!d.geojson||!d.osm_id)return null;const g=d.geojson;let poly=null;
     if(g.type==='Polygon')poly=g.coordinates;
     else if(g.type==='MultiPolygon'){poly=[];for(const pg of g.coordinates)for(const ring of pg)poly.push(ring);}
     if(!poly||!poly.length)return null; // Point (pas de polygone) → on ignore, on retentera
     const ad=d.address||{};
-    return {id:'c'+d.osm_id,name:d.name||ad.city||ad.town||ad.village||ad.municipality||'Zone',lvl:+((d.extratags||{}).admin_level)||8,poly:poly,contree:ad.county||ad.state_district||ad.state||ad.region||''};}  // contree = le GRAND niveau réel (département/région), déjà fourni par Nominatim (zéro requête en plus)
+    return {id:'c'+d.osm_id,name:d.name||ad.city||ad.town||ad.village||ad.municipality||'Zone',lvl:+((d.extratags||{}).admin_level)||8,poly:poly,contree:ad.state||ad.region||ad.county||ad.state_district||'',contreeV:2};}  // contree = CANTON (state = découpage OFFICIEL au sommet de chaque pays : canton CH / région FR) ; contreeV=2 = schéma « canton »
   let zonePending=false,lastZoneTry=0;
   function reverseZone(lng,lat){if(zonePending)return;
     if(!isFinite(lat)||lat>90||lat<-90||!isFinite(lng)||lng>180||lng<-180)return; // coords invalides → on ne bloque pas
@@ -801,6 +801,23 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(Z0&&(Z0.contree||Z0._contreeTried))return; // dans une zone qui connaît DÉJÀ sa Contrée (ou déjà tentée) → rien ; sinon on (re)interroge pour BACKFILLER la Contrée (joueur existant, cache d'avant)
     const now=performance.now();if(now-lastZoneTry<1500)return;lastZoneTry=now;
     const ll=mToLngLat(state.pl.x,state.pl.y);reverseZone(ll[0],ll[1]);}
+  // REMISE À NIVEAU DOUCE des Contrées de l'ancien schéma → CANTON : une zone déjà découverte à la fois, en arrière-plan (throttle 4 s,
+  // requête LÉGÈRE sans polygone), sans jamais faire disparaître l'ancien nom tant que le nouveau n'est pas là. Se termine tout seul.
+  let _migT=0;
+  function migrateContree(){if(!world||zonePending)return;
+    const now=performance.now();if(now-_migT<4000)return;
+    let target=null;const cur=zoneAt(state.pl.x,state.pl.y);
+    if(cur&&cur.discovered&&cur.contree&&(cur.contreeV||0)<2)target=cur;           // la zone COURANTE d'abord
+    else{for(const id of state.discR){const z=world._zoneById.get(id);if(z&&z.contree&&(z.contreeV||0)<2){target=z;break;}}}
+    if(!target)return;                                                             // plus rien à migrer → terminé
+    _migT=now;const tz=target,ll=mToLngLat(tz.cx,tz.cy);
+    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat='+ll[1]+'&lon='+ll[0],{headers:{'Accept':'application/json'}})
+      .then(function(r){return r.ok?r.json():Promise.reject();}).then(function(d){const ad=(d&&d.address)||{};const c=ad.state||ad.region||ad.county||'';
+        tz.contree=c||tz.contree;tz.contreeV=2;if(c)state.discC.add(c);
+        try{const m=zoneCacheRead();if(m[tz.id]){m[tz.id].contree=tz.contree;m[tz.id].contreeV=2;localStorage.setItem(ZCACHE_KEY,JSON.stringify(m));}}catch(_){}
+        dirty=true;if(window.__wake)__wake(400);})
+      .catch(function(){tz._migFail=(tz._migFail||0)+1;if(tz._migFail>=3)tz.contreeV=2;});   // échec réseau : on RÉESSAIE (jusqu'à 3×) avant d'abandonner (garde l'ancien nom)
+  }
   // ---- Lieux + noms de quartiers INSTANTANÉS depuis les tuiles vectorielles déjà chargées (zéro attente réseau) ----
   // On ne garde que les lieux « à découvrir » (patrimoine, culture, panoramas) — pas les commerces/arrêts de bus.
   function tilePoiType(pr){const c=pr.class,s=pr.subclass;
@@ -1173,7 +1190,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=84;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=85;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1444,6 +1461,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   }
   function update(dt){
     ensureZone(); // va chercher la vraie forme de la contrée où l'on est (si pas déjà chargée)
+    migrateContree(); // remet à niveau (canton) les Contrées de l'ancien schéma, en douceur
     refreshProgressIfOpen(); // panneau de complétion ouvert → se met à jour tout seul quand on change de zone
     for(const Z of world.communes)if(Z.discovered&&Z.rev>0)Z.rev=Math.max(0,Z.rev-dt/CONFIG.fogLift);
     let dx=0,dy=0;
