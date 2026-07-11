@@ -1150,7 +1150,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=71;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=72;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1785,12 +1785,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function wake(ms){const u=performance.now()+(ms||800);if(u>renderUntil)renderUntil=u;}
   window.__wake=wake;   // accessible aux autres modules (repères, itinéraire…)
   // Diagnostic + filet : affiche À L'ÉCRAN toute erreur (attrapée par un garde-fou OU non attrapée). Un gel silencieux devient un message lisible.
-  function logErr(where,e){try{if(window.console&&console.warn)console.warn(where,e);
-    var d=document.getElementById('errbar');
-    if(!d){d=document.createElement('div');d.id='errbar';d.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99999;background:rgba(122,16,32,.97);color:#fff;font:12px/1.45 monospace;padding:9px 12px 26px;max-height:44%;overflow:auto;white-space:pre-wrap;user-select:text;-webkit-user-select:text';d.onclick=function(){d.remove();};document.body.appendChild(d);}
-    var m=(e&&e.message)||(e&&e.toString&&e.toString())||String(e),st=(e&&e.stack)?('\n'+String(e.stack).split('\n').slice(0,4).join('\n')):'';
-    d.textContent='⚠ '+where+' — '+m+st+'\n\n(touche pour fermer)';
-  }catch(_){}}
+  function logErr(where,e){try{if(window.console&&console.warn)console.warn(where,e);}catch(_){}}   // garde-fou : les try/catch de la roue/frame loggent en CONSOLE (plus de bandeau écran de diagnostic)
   window.addEventListener('error',function(ev){if(ev&&(ev.error||ev.message))logErr('erreur',ev.error||ev.message);});   // erreurs JS non attrapées (les erreurs de ressources ne remontent pas ici)
   window.addEventListener('unhandledrejection',function(ev){try{if(window.console&&console.warn)console.warn('promesse',ev&&ev.reason);}catch(_){}});   // rejets réseau (tuiles/OSM) : console seulement, pas de bandeau
   // La boucle rAF fait AVANCER le jeu (déplacement, suivi, HUD) et NE RÉCLAME un rendu carte QUE si quelque chose s'anime
@@ -1803,8 +1798,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         const active=t<renderUntil||progPanel.classList.contains('open')||(control.joy&&control.joy.active); // qqch à animer ?
         if(active&&t-lastRender>=33){updateHUD();map.triggerRepaint();lastRender=t;lastHud=t;} // GPU actif seulement quand utile, PLAFONNÉ à ~30 fps (moitié moins de charge qu'à 60)
         else if(!active&&t-lastHud>500){updateHUD();lastHud=t;}      // à l'arrêt : petit battement HUD (compteur de pas) sans réveiller le GPU
-        if(t-(window.__dbgT||0)>250){window.__dbgT=t;var _d=window.__dbgEl||(window.__dbgEl=(function(){var x=document.createElement('div');x.id='dbg';x.style.cssText='position:fixed;top:2px;left:2px;z-index:99998;background:rgba(0,0,0,.62);color:#7CFC00;font:10px/1.25 monospace;padding:2px 5px;border-radius:3px;pointer-events:none';document.body.appendChild(x);return x;})());
-          _d.textContent='f'+window.__ff+' r'+(window.__rr||0)+' mov'+(map.isMoving()?1:0)+' act'+(active?1:0)+' w'+(document.getElementById('markerWheel').classList.contains('open')?1:0)+' pd'+(window.__pd||0)+' ha'+((function(){try{return map.handlers.isActive()?1:0;}catch(_){return 9;}})());}}   // DIAG écran (temporaire) : w=roue ouverte, pd=pointerdown reçus par la carte, ha=un geste MapLibre coincé actif. Si gel : taper un COIN vide → w1=roue coincée / ha1=geste bloqué / pd fige=tactile mort
+      }
     }catch(e){logErr('frame',e);}
     finally{requestAnimationFrame(frame);}   // RÉ-ARMEMENT GARANTI : plus AUCUNE exception ne peut tuer le moteur (fini le gel total « plus rien ne marche »)
   }
@@ -1939,7 +1933,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   map.on('idle',harvestSoon);map.on('moveend',harvestSoon);map.on('sourcedata',e=>{if(e.sourceId==='omt'&&e.isSourceLoaded)harvestSoon();});
   // RÉVEIL du rendu sur toute interaction/animation carte (pan, zoom, flyTo, setCenter…) + tout contact tactile/souris → le calque suit.
   map.on('move',()=>wake(500));map.on('zoom',()=>wake(500));
-  try{map.getContainer().addEventListener('pointerdown',()=>{window.__pd=(window.__pd||0)+1;wake(1600);},{passive:true});}catch(_){}  // __pd = sonde diag (temporaire) : compte les pointerdown atteignant VRAIMENT la carte
+  try{map.getContainer().addEventListener('pointerdown',()=>wake(1600),{passive:true});}catch(_){}
   // DESSIN du calque calé sur le rendu de la carte (transformée de l'image en cours) → le brouillard/les frontières ne « nagent » plus au zoom/pan
   map.on('render',()=>{window.__rr=(window.__rr||0)+1;if(ready&&world){try{drawOverlay(performance.now());}catch(e){logErr('overlay',e);}}});   // calque isolé : une frame fautive ne casse plus le pipeline (fini le gel total)
   // ---- Boot ----
