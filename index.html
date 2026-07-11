@@ -1051,7 +1051,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     // Corrige le gel « 2e roue » : la fermeture ne dépend plus JAMAIS d'un clic tactile capricieux ni de la carte
     // (le disque, frère de #map, interceptait tout événement — s'il restait ouvert, plus rien n'atteignait la carte = gel).
     const back=document.createElement('div');back.className='mw-back';
-    back.addEventListener('pointerdown',e=>{try{e.preventDefault();}catch(_){}closeWheel();});
+    back.addEventListener('pointerup',e=>{try{e.stopPropagation();}catch(_){}closeWheel();});  // relâcher hors du disque = ferme (sur pointerup → la capture du doigt est déjà libérée, jamais bloquée)
     w.appendChild(back);
     const disc=document.createElement('div');disc.className='mw-disc';
     const img=document.createElement('img');img.alt='';img.src=svgURL(_wheelSVG(MARKER_TYPES.map(t=>t.k)));
@@ -1103,14 +1103,18 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     p.style.left=Math.max(8,Math.min(W-168,mp.x-78))+'px';p.style.top=Math.max(8,mp.y-96)+'px';p.classList.add('show');
     document.getElementById('mpRoute').onclick=()=>{const mm=lngLatToM(mk.lng,mk.lat);setRoute(mm.x,mm.y,MARKER_LABEL[mk.type]||'Repère');closeMarkerPop();};
     document.getElementById('mpDel').onclick=()=>{markers=markers.filter(x=>x.id!==mk.id);saveMarkers();closeMarkerPop();};}
-  // clic long (souris/tactile) sans bouger = ouvrir la roue à cet endroit
-  (function(){const mc=map.getContainer();let t=null,sx=0,sy=0;
-    mc.addEventListener('pointerdown',e=>{try{if(e.button&&e.button!==0)return;suppressClick=false;if(wheelOpen()){closeWheel();return;} // self-heal : un pointerdown carte alors que la roue est ouverte la FERME (au cas où le voile raterait) — jamais coincée
-      sx=e.clientX;sy=e.clientY;
-      clearTimeout(t);t=setTimeout(()=>openWheel(sx,sy),450);}catch(err){logErr('long-press',err);}});
-    mc.addEventListener('pointermove',e=>{if(t&&Math.hypot(e.clientX-sx,e.clientY-sy)>10){clearTimeout(t);t=null;}});
-    mc.addEventListener('pointerup',()=>{clearTimeout(t);t=null;});
-    mc.addEventListener('pointercancel',()=>{clearTimeout(t);t=null;});
+  // clic long (souris/tactile) sans bouger = ouvrir la roue.
+  // ⚠️ CLÉ ANTI-GEL : le maintien ARME l'ouverture (450 ms immobile), mais la roue s'ouvre au RELÂCHER du doigt (pointerup).
+  // Ainsi elle n'apparaît JAMAIS sous un doigt encore posé → aucune capture de pointeur bloquée sur la carte
+  // → tes taps suivants atteignent bien le voile → la roue se referme toujours (fin du gel « 2e roue »).
+  (function(){const mc=map.getContainer();let t=null,sx=0,sy=0,armed=false;
+    mc.addEventListener('pointerdown',e=>{try{if(e.button&&e.button!==0)return;suppressClick=false;
+      if(wheelOpen()){closeWheel();return;}                                   // self-heal : roue déjà ouverte → on la ferme (jamais coincée)
+      sx=e.clientX;sy=e.clientY;armed=false;
+      clearTimeout(t);t=setTimeout(()=>{armed=true;},450);}catch(err){logErr('long-press',err);}});  // 450 ms immobile → ARMÉ (pas encore ouvert)
+    mc.addEventListener('pointermove',e=>{if(Math.hypot(e.clientX-sx,e.clientY-sy)>10){clearTimeout(t);t=null;armed=false;}}); // ça glisse = pan → annule
+    mc.addEventListener('pointerup',()=>{clearTimeout(t);t=null;if(armed){armed=false;openWheel(sx,sy);}});                    // relâché APRÈS maintien → ouvre ICI (doigt levé)
+    mc.addEventListener('pointercancel',()=>{clearTimeout(t);t=null;armed=false;});
   })();
   // ── zoom (le dézoom mène naturellement à la vue planète — plus de bouton dédié) ──
   document.getElementById('zin').onclick=()=>map.zoomIn();
@@ -1146,7 +1150,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=70;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=71;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
