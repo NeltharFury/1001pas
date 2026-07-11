@@ -231,7 +231,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #markerWheel{position:absolute;z-index:14;width:0;height:0;pointer-events:none;}
   #markerWheel.open{pointer-events:auto;}
   #markerWheel .mw-disc{position:absolute;left:0;top:0;transform:translate(-50%,-50%) scale(.15);opacity:0;cursor:pointer;
-    transition:transform .26s cubic-bezier(.18,1.5,.35,1),opacity .17s ease;}   /* ombre PEINTE dans le SVG (pas de filter:drop-shadow → pas d'anim coûteuse GPU mobile) */
+    transition:transform .26s cubic-bezier(.18,1.5,.35,1),opacity .17s ease;filter:drop-shadow(0 7px 18px rgba(40,24,6,.5));}
   #markerWheel.open .mw-disc{transform:translate(-50%,-50%) scale(1);opacity:1;}
   #markerWheel .mw-disc img{display:block;width:210px;height:210px;}
   #markerWheel .mw-disc:active{transform:translate(-50%,-50%) scale(.97);}
@@ -1122,7 +1122,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=66;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=67;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1498,41 +1498,35 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // ROUE DES MARQUEURS = UN SEUL CACHET DE CIRE segmenté. types = liste des clés d'empreintes ; le nb de quartiers s'adapte
   // (pour rajouter des marqueurs plus tard, il suffit d'ajouter à MARKER_TYPES). Les empreintes sont dimensionnées pour NE PAS déborder.
   const WHEEL_ROUT=100, WHEEL_RIN=38, WHEEL_VB=220;   // rayon disque / rayon centre / viewBox (unités)
-  // Bord IRRÉGULIER façon cire fait GÉOMÉTRIQUEMENT (bruit dans le tracé) — AUCUN feTurbulence :
-  // rendu instantané sur tous les GPU (les filtres SVG gèlent certains WebView mobiles). L'ombre est PEINTE (pas de filter:drop-shadow).
-  function _wnoise(x){var xi=Math.floor(x),xf=x-xi;function hh(n){var s=Math.sin(n*127.1)*43758.5453;return (s-Math.floor(s))*2-1;}
-    var a=hh(xi),b=hh(xi+1),t=xf*xf*(3-2*xf);return a+(b-a)*t;}
-  function _wwob(th,seed,amp){return amp*(0.62*_wnoise(th*7+seed)+0.38*_wnoise(th*18.9+seed*1.7));}  // bruit sur l'angle ABSOLU → contour continu d'un quartier à l'autre
   function _wheelSVG(types){
-    var N=types.length, Ro=WHEEL_ROUT, Ri=WHEEL_RIN, G=6, Rin=Ri+G, Rg=(Rin+Ro)/2, step=2*Math.PI/N;
+    var N=types.length, Ro=WHEEL_ROUT, Ri=WHEEL_RIN, G=6, Rin=Ri+G, Rg=(Rin+Ro)/2, step=2*Math.PI/N;  // G = ESPACE UNIFORME (entre quartiers ET autour du centre)
     var gs=Math.min(Ro-Rin, Rg*step-2*G)/25;             // échelle empreinte : tient dans le quartier → ne déborde pas
-    var h=G/2, tin=Math.sqrt(Rin*Rin-h*h), tout=Math.sqrt(Ro*Ro-h*h), bo=Math.asin(h/Ro), bi=Math.asin(h/Rin);
+    var h=G/2, tin=Math.sqrt(Rin*Rin-h*h), tout=Math.sqrt(Ro*Ro-h*h);
     function f(x){return x.toFixed(2);}
-    function pt(th,R){return f(Math.cos(th)*R)+' '+f(Math.sin(th)*R);}
-    // arc bosselé th0→th1 : fenêtre sin() → bruit NUL aux extrémités (gouttières nettes/uniformes), MAX au milieu (bosses de cire)
-    function arc(th0,th1,R,seed,amp){var d='',st=Math.max(6,Math.round(Math.abs(th1-th0)/0.045));
-      for(var i=0;i<=st;i++){var u=i/st,th=th0+(th1-th0)*u,r=R+_wwob(th,seed,amp)*Math.sin(Math.PI*u);
-        d+='L'+pt(th,r);}return d;}
-    // quartier : côtés radiaux DÉCALÉS (gouttière constante G) ; arcs ext/int IRRÉGULIERS façon cire. Angles calculés sans atan2 (robuste au passage ±180°).
-    function wedge(ac){var a0=ac-step/2,a1=ac+step/2;
-      return 'M'+pt(a0+bi,Rin)+arc(a0+bo,a1-bo,Ro,7.3,4.6)+arc(a1-bi,a0+bi,Rin,3.1,2.2)+'Z';}
-    function blob(R,seed,amp,cx,cy){var d='M';for(var k=0;k<=48;k++){var th=k/48*2*Math.PI,r=R+_wwob(th,seed,amp);d+=(k?'L':'')+f((cx||0)+Math.cos(th)*r)+' '+f((cy||0)+Math.sin(th)*r);}return d+'Z';}
-    var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="-110 -110 '+WHEEL_VB+' '+WHEEL_VB+'" width="'+WHEEL_VB+'" height="'+WHEEL_VB+'"><defs>'
-      +'<radialGradient id="ws" cx="0.38" cy="0.3" r="0.85"><stop offset="0" stop-color="#fff5e2" stop-opacity="0.5"/><stop offset="0.45" stop-color="#fff" stop-opacity="0"/><stop offset="0.8" stop-color="#3c000a" stop-opacity="0"/><stop offset="1" stop-color="#3c000a" stop-opacity="0.4"/></radialGradient>'  // sheen du centre uniquement (PAS de FABLE_DEFS → aucun feTurbulence défini, même inutilisé)
-      +'<radialGradient id="wgU" gradientUnits="userSpaceOnUse" cx="-32" cy="-42" r="132"><stop offset="0" stop-color="#fff8e0" stop-opacity="0.5"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/><stop offset="0.85" stop-color="#2e1d00" stop-opacity="0"/><stop offset="1" stop-color="#2e1d00" stop-opacity="0.42"/></radialGradient>'
-      +'<radialGradient id="wsh" gradientUnits="userSpaceOnUse" cx="0" cy="4" r="108"><stop offset="0.86" stop-color="#281806" stop-opacity="0"/><stop offset="0.955" stop-color="#281806" stop-opacity="0.4"/><stop offset="1" stop-color="#281806" stop-opacity="0"/></radialGradient></defs>';
-    s+='<circle cx="0" cy="4" r="108" fill="url(#wsh)"/>';                                        // OMBRE peinte (halo doux) — remplace filter:drop-shadow (coûteux à animer sur mobile)
-    var i,j;
-    s+='<g transform="translate(1.3 1.8)">';                                                      // ÉPAISSEUR de cire : copie sombre décalée (lip 3D)
-    for(i=0;i<N;i++)s+='<path d="'+wedge(-Math.PI/2+i*step)+'" fill="#6f4c0d"/>';
+    // quartier à BORDS DÉCALÉS (parallèles) → gouttière d'épaisseur constante G entre voisins ; fond transparent → la carte se voit dessous
+    function wedge(ac){var a0=ac-step/2,a1=ac+step/2,
+      n0x=-Math.sin(a0),n0y=Math.cos(a0),u0x=Math.cos(a0),u0y=Math.sin(a0),
+      n1x=Math.sin(a1),n1y=-Math.cos(a1),u1x=Math.cos(a1),u1y=Math.sin(a1),lg=step>Math.PI?1:0;
+      return 'M'+f(h*n0x+tin*u0x)+' '+f(h*n0y+tin*u0y)+' L'+f(h*n0x+tout*u0x)+' '+f(h*n0y+tout*u0y)
+        +' A'+Ro+' '+Ro+' 0 '+lg+' 1 '+f(h*n1x+tout*u1x)+' '+f(h*n1y+tout*u1y)
+        +' L'+f(h*n1x+tin*u1x)+' '+f(h*n1y+tin*u1y)
+        +' A'+Rin+' '+Rin+' 0 '+lg+' 0 '+f(h*n0x+tin*u0x)+' '+f(h*n0y+tin*u0y)+' Z';}
+    var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="-110 -110 '+WHEEL_VB+' '+WHEEL_VB+'" width="'+WHEEL_VB+'" height="'+WHEEL_VB+'"><defs>'+FABLE_DEFS
+      +'<filter id="ww" x="-15%" y="-15%" width="130%" height="130%"><feTurbulence type="fractalNoise" baseFrequency="0.22" numOctaves="2" seed="9" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="3.6"/></filter>'   // grain de cire (bord irrégulier) — MÊME rendu que les cachets
+      +'<radialGradient id="wgU" gradientUnits="userSpaceOnUse" cx="-32" cy="-42" r="132"><stop offset="0" stop-color="#fff8e0" stop-opacity="0.5"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/><stop offset="0.85" stop-color="#2e1d00" stop-opacity="0"/><stop offset="1" stop-color="#2e1d00" stop-opacity="0.42"/></radialGradient></defs>';
+    // ÉPAISSEUR de cire : copie sombre décalée SOUS le même filtre → le lip irrégulier suit le bord (comme les cachets de site)
+    s+='<g filter="url(#ww)" transform="translate(1.3 1.8)">';
+    for(var i=0;i<N;i++)s+='<path d="'+wedge(-Math.PI/2+i*step)+'" fill="#6f4c0d"/>';
     s+='</g>';
-    for(i=0;i<N;i++)s+='<path d="'+wedge(-Math.PI/2+i*step)+'" fill="#B08427"/>';                 // QUARTIERS de cire OR ; gouttières TRANSPARENTES (carte visible dessous)
-    for(i=0;i<N;i++)s+='<path d="'+wedge(-Math.PI/2+i*step)+'" fill="url(#wgU)"/>';               // modelé or global (reflet crème)
-    for(j=0;j<N;j++){var a=-Math.PI/2+j*step, gx=Math.cos(a)*Rg, gy=Math.sin(a)*Rg, g=MGLYPHS[types[j]]||MGLYPHS.drapeau;  // 1 empreinte crème / quartier
+    s+='<g filter="url(#ww)">';                                                                  // QUARTIERS de cire OR (bord IRRÉGULIER façon cire) ; espaces TRANSPARENTS (carte visible dessous)
+    for(var i=0;i<N;i++)s+='<path d="'+wedge(-Math.PI/2+i*step)+'" fill="#B08427"/>';
+    for(var i=0;i<N;i++)s+='<path d="'+wedge(-Math.PI/2+i*step)+'" fill="url(#wgU)"/>';           // modelé or global (reflet crème = motif blanc), uniquement sur les quartiers
+    s+='</g>';
+    for(var j=0;j<N;j++){var a=-Math.PI/2+j*step, gx=Math.cos(a)*Rg, gy=Math.sin(a)*Rg, g=MGLYPHS[types[j]]||MGLYPHS.drapeau;  // 1 empreinte crème / quartier
       s+='<path d="'+g+'" transform="translate('+gx.toFixed(1)+' '+gy.toFixed(1)+') scale('+gs.toFixed(3)+') translate(-12 -12)" fill="none" stroke="#fdf6e3" stroke-width="'+(2.4/gs).toFixed(2)+'" stroke-linecap="round" stroke-linejoin="round"/>';}
-    // centre noir DÉTACHÉ : cachet de cire légèrement irrégulier (géométrique) + sheen + flèche itinéraire
-    s+='<path d="'+blob(Ri+1,11.5,1.1,0.8,1)+'" fill="#000"/>';
-    s+='<path d="'+blob(Ri,11.5,1.0,0,0)+'" fill="#2b2724"/><path d="'+blob(Ri,11.5,1.0,0,0)+'" fill="url(#ws)"/>';
+    s+='<circle cx="0.8" cy="1" r="'+(Ri+1)+'" fill="#000"/>';                                    // centre DÉTACHÉ (espace G) : cachet de cire NOIR
+    s+='<g filter="url(#ww)"><circle r="'+Ri+'" fill="#2b2724"/></g>';                            // centre noir : même grain de cire que les quartiers
+    s+='<circle r="'+Ri+'" fill="url(#ws)"/>';
     var rs=Ri*0.062;
     s+='<path d="'+MROUTE+'" transform="scale('+rs.toFixed(3)+') translate(-12 -12)" fill="#f7ecd4" stroke="#f7ecd4" stroke-width="0.6" stroke-linejoin="round"/>';  // flèche itinéraire
     return s+'</svg>';}
@@ -1540,7 +1534,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const _imgCache=new Map();
   function _cachedImg(key,svg){var e=_imgCache.get(key);if(e)return e.ready?e.img:null;
     var img=new Image();e={img:img,ready:false};_imgCache.set(key,e);
-    img.onload=function(){e.ready=true;if(window.__wake)__wake(300);};img.src=svgURL(svg);return null;}
+    img.onload=function(){e.ready=true;if(window.__wake)__wake(300);};
+    img.onerror=function(){e.ready=false;};   // image cassée → jamais passée à drawImage (qui lèverait InvalidStateError) → on garde le repli vectoriel
+    img.src=svgURL(svg);return null;}
   function tierShape(t){return t==='major'?'star':t==='notable'?'diamond':'circle';}
   function sealImg(shape,glyphKey,sealed){return _cachedImg((sealed?'c':'l')+shape+glyphKey,_sealSVG(shape,GLYPHS[glyphKey]||GLYPHS.curio,sealed));}
   function markerImg(type){return _cachedImg('m'+type,_markerSVG(MGLYPHS[type]||MGLYPHS.drapeau));}
@@ -1690,6 +1686,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?24:19,disc:disc,prox:prox,av:av,g:P.g});}}
     // 3) placement glouton : débloqués d'abord, puis sites marquants, puis de haut en bas ; on saute tout nom qui en chevauche un déjà posé (le sceau reste)
     nameCands.sort((a,b)=>(b.disc-a.disc)||((NAME_PRIO[b.g]||0)-(NAME_PRIO[a.g]||0))||(a.y-b.y));
+    if(nameCands.length>350)nameCands.length=350;   // borne dure défensive : en ville très dense (plus de plafond de sites), évite un pic O(n²) de placement d'étiquettes par frame
     fctx.font='600 10.5px '+FONT_SERIF;
     for(const c of nameCands){const nw=fctx.measureText(c.nm).width,bx={x:c.x-nw/2-6,y:c.y+c.oy,w:nw+12,h:15};
       if(boxHit(bx))continue; labelBoxes.push(bx);
@@ -1761,12 +1758,16 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   window.__wake=wake;   // accessible aux autres modules (repères, itinéraire…)
   // La boucle rAF fait AVANCER le jeu (déplacement, suivi, HUD) et NE RÉCLAME un rendu carte QUE si quelque chose s'anime
   // (avant : map.triggerRepaint() à CHAQUE frame → carte re-rendue 60 fps en continu même à l'arrêt → téléphone bouillant).
-  function frame(t){const dt=Math.min(0.05,(t-last)/1000);last=t;
-    if(ready&&world){const moved=update(dt);if(moved){wake(600);if(follow)map.setCenter(playerLngLat());}
-      const active=t<renderUntil||progPanel.classList.contains('open')||(control.joy&&control.joy.active); // qqch à animer ?
-      if(active&&t-lastRender>=33){updateHUD();map.triggerRepaint();lastRender=t;lastHud=t;} // GPU actif seulement quand utile, PLAFONNÉ à ~30 fps (moitié moins de charge qu'à 60)
-      else if(!active&&t-lastHud>500){updateHUD();lastHud=t;}}      // à l'arrêt : petit battement HUD (compteur de pas) sans réveiller le GPU
-    requestAnimationFrame(frame);}
+  function frame(t){
+    try{
+      const dt=Math.min(0.05,(t-last)/1000);last=t;
+      if(ready&&world){const moved=update(dt);if(moved){wake(600);if(follow)map.setCenter(playerLngLat());}
+        const active=t<renderUntil||progPanel.classList.contains('open')||(control.joy&&control.joy.active); // qqch à animer ?
+        if(active&&t-lastRender>=33){updateHUD();map.triggerRepaint();lastRender=t;lastHud=t;} // GPU actif seulement quand utile, PLAFONNÉ à ~30 fps (moitié moins de charge qu'à 60)
+        else if(!active&&t-lastHud>500){updateHUD();lastHud=t;}}      // à l'arrêt : petit battement HUD (compteur de pas) sans réveiller le GPU
+    }catch(e){if(window.console&&console.warn)console.warn('frame',e);}
+    finally{requestAnimationFrame(frame);}   // RÉ-ARMEMENT GARANTI : plus AUCUNE exception ne peut tuer le moteur (fini le gel total « plus rien ne marche »)
+  }
 
   // ---- VRAI GPS (version distribuable) : la position réelle du téléphone pilote l'avatar ----
   let geoWatch=null, geoFirst=true, bootHadSave=false, geoWatchdog=null, lastAcc=null;
@@ -1900,7 +1901,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   map.on('move',()=>wake(500));map.on('zoom',()=>wake(500));
   try{map.getContainer().addEventListener('pointerdown',()=>wake(1600),{passive:true});}catch(_){}
   // DESSIN du calque calé sur le rendu de la carte (transformée de l'image en cours) → le brouillard/les frontières ne « nagent » plus au zoom/pan
-  map.on('render',()=>{if(ready&&world)drawOverlay(performance.now());});
+  map.on('render',()=>{if(ready&&world){try{drawOverlay(performance.now());}catch(e){if(window.console&&console.warn)console.warn('overlay',e);}}});   // calque isolé : une frame fautive ne casse plus le pipeline (fini le gel total)
   // ---- Boot ----
   map.on('load',()=>{
     map.on('styleimagemissing',ev=>{try{if(!map.hasImage(ev.id))map.addImage(ev.id,{width:1,height:1,data:new Uint8Array(4)});}catch(_){}});
