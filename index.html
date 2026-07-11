@@ -975,7 +975,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   recenterBtn.onclick=()=>{follow=true;recenterBtn.classList.remove('show');if(world)map.setCenter(playerLngLat());if(!DEV)startGeo();}; // relance aussi le GPS au besoin
   // Toute interaction manuelle (glisser/zoom) débraye le suivi immédiatement → la carte reste libre
   map.on('movestart',e=>{if(e&&e.originalEvent){follow=false;recenterBtn.classList.add('show');}});
-  map.on('click',e=>{
+  map.on('click',e=>{try{
     if(suppressClick){suppressClick=false;return;}                 // clic issu du clic long (ouverture de la roue) → ignoré
     const _mp=markerPop();if(_mp&&_mp.classList.contains('show'))closeMarkerPop();
     if(!world||!ready)return; // avant l'init du monde, un clic ne doit rien faire (lngLatToM lirait world.C)
@@ -985,7 +985,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     {let best=null,bestR=null,bestD=26;
       for(const Z of world.communes){if(!Z.discovered)continue;for(const P of Z.pois){const pp=proj(P.x,P.y);const d=Math.hypot(pp.x-px,pp.y-py);if(d<bestD){bestD=d;best=P;bestR=Z;}}}
       if(best){openPOI(best,bestR);return;}}
-    if(DEV){const m=lngLatToM(e.lngLat.lng,e.lngLat.lat);control.target={x:m.x,y:m.y};}}); // distribuable : toucher la carte à vide ne fait rien
+    if(DEV){const m=lngLatToM(e.lngLat.lng,e.lngLat.lat);control.target={x:m.x,y:m.y};}}catch(err){logErr('map-click',err);}}); // distribuable : toucher la carte à vide ne fait rien
   // ── itinéraire qui suit les VRAIES ROUTES (OSRM profil piéton, service libre sans clé) ──
   const routeBar=document.getElementById('routeBar'),rbName=document.getElementById('rbName'),rbPas=document.getElementById('rbPas');
   let routeReq=0;
@@ -1029,7 +1029,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const wheelEl=()=>document.getElementById('markerWheel');
   const wheelOpen=()=>{const w=wheelEl();return !!(w&&w.classList.contains('open'));};
   let wheelLL=null, suppressClick=false;
-  function openWheel(clientX,clientY){
+  function openWheel(clientX,clientY){try{
     const w=wheelEl();if(!w)return;const mc=map.getContainer(),rect=mc.getBoundingClientRect();
     const px=clientX-rect.left, py=clientY-rect.top;
     try{wheelLL=map.unproject([px,py]);}catch(_){return;}                       // le marqueur ira au point RÉELLEMENT pressé
@@ -1038,23 +1038,26 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     w.innerHTML='';w.style.left=dispX+'px';w.style.top=dispY+'px';
     const n=MARKER_TYPES.length, step=2*Math.PI/n;
     const disc=document.createElement('div');disc.className='mw-disc';
-    const img=document.createElement('img');img.alt='';img.src=svgURL(_wheelSVG(MARKER_TYPES.map(t=>t.k)));  // SVG sans filtre → décodage instantané, mise à l'échelle par le compositeur (aucun coût GPU mobile)
+    const img=document.createElement('img');img.alt='';img.src=svgURL(_wheelSVG(MARKER_TYPES.map(t=>t.k)));
     disc.appendChild(img);w.appendChild(disc);
-    // clic : rayon → centre (itinéraire) ou quartier ; angle → quel marqueur. Insensible au nb de quartiers.
-    disc.addEventListener('click',e=>{e.stopPropagation();
-      const r=img.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+    // clic : rayon → centre (itinéraire) ou quartier ; angle → quel marqueur. Insensible au nb de quartiers. TOUT est gardé.
+    disc.addEventListener('click',e=>{try{e.stopPropagation();
+      const r=img.getBoundingClientRect();if(!(r.width>0)){closeWheel();return;}       // disque pas encore mesurable → ferme, aucune sélection douteuse
+      const cx=r.left+r.width/2,cy=r.top+r.height/2;
       const dx=e.clientX-cx,dy=e.clientY-cy,distU=Math.hypot(dx,dy)*(WHEEL_VB/r.width);
-      if(distU>WHEEL_ROUT+10){closeWheel();return;}                                   // hors du cachet → ferme
+      if(!(distU>=0)){closeWheel();return;}                                            // NaN/Infinity → ferme (jamais de calcul d'index douteux)
+      if(distU>WHEEL_ROUT+10){closeWheel();return;}                                    // hors du cachet → ferme
       if(distU<WHEEL_RIN){if(wheelLL&&world){const m=lngLatToM(wheelLL.lng,wheelLL.lat);setRoute(m.x,m.y,'Point choisi');}closeWheel();return;} // centre = itinéraire
       let idx=Math.round((Math.atan2(dy,dx)+Math.PI/2)/step);idx=((idx%n)+n)%n;        // quartier le plus proche
-      if(wheelLL)placeMarker(MARKER_TYPES[idx].k,wheelLL.lng,wheelLL.lat);closeWheel();});
+      if(wheelLL)placeMarker(MARKER_TYPES[idx].k,wheelLL.lng,wheelLL.lat);closeWheel();
+    }catch(err){logErr('roue-clic',err);closeWheel();}});
     void disc.offsetWidth;                              // flush l'état initial (scale .2 / opacity 0) → la transition « pop » élastique se déclenche vraiment
     w.classList.add('open');suppressClick=true;
-    setTimeout(()=>document.addEventListener('pointerdown',wheelOutside,{once:true}),0);
-  }
-  function wheelOutside(e){const w=wheelEl();if(w&&!w.contains(e.target))closeWheel();}
-  function closeWheel(){const w=wheelEl();if(!w){wheelLL=null;return;}w.classList.remove('open');wheelLL=null; // retrait EN DOUCEUR : on garde le disque le temps de la transition (scale 1→.2), puis on vide — sauf si rouvert entre-temps
-    setTimeout(()=>{if(!w.classList.contains('open'))w.innerHTML='';},240);}
+    setTimeout(()=>{try{document.addEventListener('pointerdown',wheelOutside,{once:true});}catch(_){}},0);
+  }catch(e){logErr('openWheel',e);}}
+  function wheelOutside(e){try{const w=wheelEl();if(w&&!w.contains(e.target))closeWheel();}catch(err){logErr('wheelOutside',err);}}
+  function closeWheel(){try{const w=wheelEl();if(!w){wheelLL=null;return;}w.classList.remove('open');wheelLL=null; // retrait EN DOUCEUR : on garde le disque le temps de la transition (scale 1→.2), puis on vide — sauf si rouvert entre-temps
+    setTimeout(()=>{try{if(!w.classList.contains('open'))w.innerHTML='';}catch(_){}},240);}catch(e){logErr('closeWheel',e);}}
   function placeMarker(type,lng,lat){markers.push({id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4),lng:lng,lat:lat,type:type,ts:Date.now()});saveMarkers();toast('r','✦','Repère posé',MARKER_LABEL[type]||'Repère');if(window.__wake)__wake(900);}
   // Repère du joueur : GOUTTE DE CIRE D'OR (design Fable 5) dont la POINTE désigne le sol — distinct du sceau carmin des sites.
   // (x,y) = le point EXACT ; le corps flotte 21px au-dessus, la queue redescend jusqu'au point.
@@ -1082,8 +1085,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     document.getElementById('mpDel').onclick=()=>{markers=markers.filter(x=>x.id!==mk.id);saveMarkers();closeMarkerPop();};}
   // clic long (souris/tactile) sans bouger = ouvrir la roue à cet endroit
   (function(){const mc=map.getContainer();let t=null,sx=0,sy=0;
-    mc.addEventListener('pointerdown',e=>{if(e.button&&e.button!==0)return;suppressClick=false;if(wheelOpen())return;sx=e.clientX;sy=e.clientY; // reset defensif : evite qu'un suppressClick reste coince si le 'click' ne suit pas le clic long
-      clearTimeout(t);t=setTimeout(()=>{openWheel(sx,sy);},450);});
+    mc.addEventListener('pointerdown',e=>{try{if(e.button&&e.button!==0)return;suppressClick=false;if(wheelOpen())return;sx=e.clientX;sy=e.clientY; // reset defensif : evite qu'un suppressClick reste coince si le 'click' ne suit pas le clic long
+      clearTimeout(t);t=setTimeout(()=>openWheel(sx,sy),450);}catch(err){logErr('long-press',err);}});
     mc.addEventListener('pointermove',e=>{if(t&&Math.hypot(e.clientX-sx,e.clientY-sy)>10){clearTimeout(t);t=null;}});
     mc.addEventListener('pointerup',()=>{clearTimeout(t);t=null;});
     mc.addEventListener('pointercancel',()=>{clearTimeout(t);t=null;});
@@ -1122,7 +1125,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=67;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=68;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1756,6 +1759,15 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // (déplacement, interaction carte, découverte, sceau…). wake(ms) prolonge cette fenêtre. Hors fenêtre → le GPU DORT.
   function wake(ms){const u=performance.now()+(ms||800);if(u>renderUntil)renderUntil=u;}
   window.__wake=wake;   // accessible aux autres modules (repères, itinéraire…)
+  // Diagnostic + filet : affiche À L'ÉCRAN toute erreur (attrapée par un garde-fou OU non attrapée). Un gel silencieux devient un message lisible.
+  function logErr(where,e){try{if(window.console&&console.warn)console.warn(where,e);
+    var d=document.getElementById('errbar');
+    if(!d){d=document.createElement('div');d.id='errbar';d.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99999;background:rgba(122,16,32,.97);color:#fff;font:12px/1.45 monospace;padding:9px 12px 26px;max-height:44%;overflow:auto;white-space:pre-wrap;user-select:text;-webkit-user-select:text';d.onclick=function(){d.remove();};document.body.appendChild(d);}
+    var m=(e&&e.message)||(e&&e.toString&&e.toString())||String(e),st=(e&&e.stack)?('\n'+String(e.stack).split('\n').slice(0,4).join('\n')):'';
+    d.textContent='⚠ '+where+' — '+m+st+'\n\n(touche pour fermer)';
+  }catch(_){}}
+  window.addEventListener('error',function(ev){if(ev&&(ev.error||ev.message))logErr('erreur',ev.error||ev.message);});   // erreurs JS non attrapées (les erreurs de ressources ne remontent pas ici)
+  window.addEventListener('unhandledrejection',function(ev){try{if(window.console&&console.warn)console.warn('promesse',ev&&ev.reason);}catch(_){}});   // rejets réseau (tuiles/OSM) : console seulement, pas de bandeau
   // La boucle rAF fait AVANCER le jeu (déplacement, suivi, HUD) et NE RÉCLAME un rendu carte QUE si quelque chose s'anime
   // (avant : map.triggerRepaint() à CHAQUE frame → carte re-rendue 60 fps en continu même à l'arrêt → téléphone bouillant).
   function frame(t){
@@ -1765,7 +1777,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         const active=t<renderUntil||progPanel.classList.contains('open')||(control.joy&&control.joy.active); // qqch à animer ?
         if(active&&t-lastRender>=33){updateHUD();map.triggerRepaint();lastRender=t;lastHud=t;} // GPU actif seulement quand utile, PLAFONNÉ à ~30 fps (moitié moins de charge qu'à 60)
         else if(!active&&t-lastHud>500){updateHUD();lastHud=t;}}      // à l'arrêt : petit battement HUD (compteur de pas) sans réveiller le GPU
-    }catch(e){if(window.console&&console.warn)console.warn('frame',e);}
+    }catch(e){logErr('frame',e);}
     finally{requestAnimationFrame(frame);}   // RÉ-ARMEMENT GARANTI : plus AUCUNE exception ne peut tuer le moteur (fini le gel total « plus rien ne marche »)
   }
 
@@ -1901,7 +1913,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   map.on('move',()=>wake(500));map.on('zoom',()=>wake(500));
   try{map.getContainer().addEventListener('pointerdown',()=>wake(1600),{passive:true});}catch(_){}
   // DESSIN du calque calé sur le rendu de la carte (transformée de l'image en cours) → le brouillard/les frontières ne « nagent » plus au zoom/pan
-  map.on('render',()=>{if(ready&&world){try{drawOverlay(performance.now());}catch(e){if(window.console&&console.warn)console.warn('overlay',e);}}});   // calque isolé : une frame fautive ne casse plus le pipeline (fini le gel total)
+  map.on('render',()=>{if(ready&&world){try{drawOverlay(performance.now());}catch(e){logErr('overlay',e);}}});   // calque isolé : une frame fautive ne casse plus le pipeline (fini le gel total)
   // ---- Boot ----
   map.on('load',()=>{
     map.on('styleimagemissing',ev=>{try{if(!map.hasImage(ev.id))map.addImage(ev.id,{width:1,height:1,data:new Uint8Array(4)});}catch(_){}});
