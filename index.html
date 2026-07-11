@@ -1120,7 +1120,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     nameEl.addEventListener('input',()=>{mk.name=nameEl.value.trim()||undefined;saveMarkers();if(window.__wake)__wake(500);});   // RENOMMER : le libellé se met à jour EN DIRECT sur la carte
     p.querySelectorAll('.mp-ic').forEach(b=>{b.onclick=()=>{mk.type=b.getAttribute('data-t');saveMarkers();if(window.__wake)__wake(700);openMarkerPop(mk);};});  // ÉDITER LE TYPE : change l'icône du repère
     document.getElementById('mpRoute').onclick=()=>{const mm=lngLatToM(mk.lng,mk.lat);setRoute(mm.x,mm.y,mk.name||label);closeMarkerPop();};
-    document.getElementById('mpDel').onclick=()=>{markers=markers.filter(x=>x.id!==mk.id);saveMarkers();closeMarkerPop();};}
+    document.getElementById('mpDel').onclick=()=>{markers=markers.filter(x=>x.id!==mk.id);saveMarkers();closeMarkerPop();if(window.__wake)__wake(400);};}  // __wake : redessine TOUT DE SUITE (sinon le repère supprimé reste affiché jusqu'au prochain rendu)
   // clic long (souris/tactile) sans bouger = ouvrir la roue.
   // ⚠️ CLÉ ANTI-GEL : le maintien ARME l'ouverture (450 ms immobile), mais la roue s'ouvre au RELÂCHER du doigt (pointerup).
   // Ainsi elle n'apparaît JAMAIS sous un doigt encore posé → aucune capture de pointeur bloquée sur la carte
@@ -1168,7 +1168,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=75;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=76;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
