@@ -1168,7 +1168,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=76;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=77;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1757,10 +1757,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         fctx.save();fctx.globalAlpha=al;fctx.translate(mp.x,mp.y);fctx.scale(sc,sc);fctx.translate(-mp.x,-mp.y);drawMk();fctx.restore();
         if(window.__wake)__wake(120);
       } else drawMk();
-      if(mk.name){const la=(age>=0&&age<POP)?Math.min(1,age/150):1;      // NOM du repère sous la pointe (halo crème + encre, Cinzel)
-        fctx.save();fctx.globalAlpha=la;fctx.font='600 10.5px '+FONT_DISPLAY;fctx.textAlign='center';fctx.textBaseline='top';fctx.lineJoin='round';
-        fctx.lineWidth=2.8;fctx.strokeStyle='rgba(242,232,206,0.92)';fctx.strokeText(mk.name,mp.x,mp.y+4);
-        fctx.fillStyle='#5c4321';fctx.fillText(mk.name,mp.x,mp.y+4);fctx.restore();}
+      if(mk.name){const la=(age>=0&&age<POP)?Math.min(1,age/150):1;      // NOM du repère = MÊME encadré parchemin que les étiquettes de sites (rrect + liseré + texte centré)
+        fctx.save();fctx.globalAlpha=la;fctx.font='600 10.5px '+FONT_SERIF;fctx.textAlign='center';fctx.textBaseline='middle';
+        const nw=fctx.measureText(mk.name).width, bx={x:mp.x-nw/2-6,y:mp.y+4,w:nw+12,h:15};
+        fctx.fillStyle='rgba(243,231,198,0.92)';rrect(fctx,bx.x,bx.y,bx.w,bx.h,7);fctx.fill();
+        fctx.strokeStyle='rgba(74,52,33,0.45)';fctx.lineWidth=0.5;rrect(fctx,bx.x,bx.y,bx.w,bx.h,7);fctx.stroke();
+        fctx.fillStyle='rgba(53,36,15,0.95)';fctx.fillText(mk.name,mp.x,bx.y+7.8);
+        fctx.restore();}
     }}
     const PS=proj(state.pl.x,state.pl.y);
     // itinéraire : PERSONNAGE → cible, suit les VRAIES routes (poly OSRM), la portion déjà faite disparaît
