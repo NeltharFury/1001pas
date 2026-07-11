@@ -763,26 +763,42 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!rings.length)return null;
     let bb=[1e18,1e18,-1e18,-1e18];for(const r of rings){const b=ringBB(r);bb=[Math.min(bb[0],b[0]),Math.min(bb[1],b[1]),Math.max(bb[2],b[2]),Math.max(bb[3],b[3])];}
     let big=null,bigA=-1,area=0;for(const r of rings){const c=ringCentroid(r);if(!c)continue;area+=c.area;if(c.area>bigA){bigA=c.area;big=c;}}
-    return {id:raw.id,name:raw.name,lvl:raw.lvl||8,contree:raw.contree||'',contreeV:raw.contreeV||0,rings:rings,bb:bb,cx:big?big.x:(bb[0]+bb[2])/2,cy:big?big.y:(bb[1]+bb[3])/2,area:area||1};}
+    return {id:raw.id,name:raw.name,lvl:raw.lvl||8,contree:raw.contree||'',pays:raw.pays||'',continent:raw.continent||'',contreeV:raw.contreeV||0,rings:rings,bb:bb,cx:big?big.x:(bb[0]+bb[2])/2,cy:big?big.y:(bb[1]+bb[3])/2,area:area||1};}
   function ingestZoneRaw(raw){if(!world||!raw)return;
     if(!world._commIds.has(raw.id)){const z=buildZone(raw);if(!z)return;
       z.discovered=state.discR.has(z.id);z.rev=z.discovered?0:1;z.pois=[];
       world._commIds.add(z.id);world.communes.push(z);world._zoneById.set(z.id,z);reindexPois();}
-    else{const ez=world._zoneById.get(raw.id);if(ez&&raw.contree&&(!ez.contree||(ez.contreeV||0)<(raw.contreeV||0))){ez.contree=raw.contree;ez.contreeV=raw.contreeV||0;}} // zone déjà chargée : BACKFILL si sans Contrée, ou UPGRADE si l'ancien schéma (< canton)
+    else{const ez=world._zoneById.get(raw.id);if(ez){if(raw.contree&&(!ez.contree||(ez.contreeV||0)<(raw.contreeV||0)))ez.contree=raw.contree; // zone déjà chargée : BACKFILL / UPGRADE
+      if(raw.pays&&!ez.pays)ez.pays=raw.pays;if(raw.continent&&!ez.continent)ez.continent=raw.continent;if((raw.contreeV||0)>(ez.contreeV||0))ez.contreeV=raw.contreeV||0;}}
     revealStart();reconcileZones();} // dévoile la zone où l'on se trouve
   // Cache global (lng/lat, ré-projeté à l'ouverture) → contrées déjà visitées ré-apparaissent instantanément, même hors-ligne
   const ZCACHE_KEY='pas1001_zones_v1',ZCACHE_MAX=80;
   function zoneCacheRead(){try{return JSON.parse(localStorage.getItem(ZCACHE_KEY)||'{}')||{};}catch(e){return {};}}
-  function zoneCacheAdd(raw){try{const m=zoneCacheRead();m[raw.id]={name:raw.name,lvl:raw.lvl,poly:raw.poly,contree:raw.contree||'',contreeV:raw.contreeV||0,ts:Date.now()};
+  function zoneCacheAdd(raw){try{const m=zoneCacheRead();m[raw.id]={name:raw.name,lvl:raw.lvl,poly:raw.poly,contree:raw.contree||'',pays:raw.pays||'',continent:raw.continent||'',contreeV:raw.contreeV||0,ts:Date.now()};
     const ids=Object.keys(m);if(ids.length>ZCACHE_MAX){ids.sort((a,b)=>(m[a].ts||0)-(m[b].ts||0));for(let i=0;i<ids.length-ZCACHE_MAX;i++)delete m[ids[i]];}
     localStorage.setItem(ZCACHE_KEY,JSON.stringify(m));}catch(e){}}
-  function loadZoneCache(){const m=zoneCacheRead();for(const id in m){const c=m[id];ingestZoneRaw({id:id,name:c.name,lvl:c.lvl,poly:c.poly,contree:c.contree||'',contreeV:c.contreeV||0});}}
+  function loadZoneCache(){const m=zoneCacheRead();for(const id in m){const c=m[id];ingestZoneRaw({id:id,name:c.name,lvl:c.lvl,poly:c.poly,contree:c.contree||'',pays:c.pays||'',continent:c.continent||'',contreeV:c.contreeV||0});}}
+  // Code pays ISO (alpha-2, minuscule, fourni GRATUITEMENT par Nominatim) → CONTINENT (nom officiel FR).
+  // Table 100% hors-ligne (aucune requête). Le Pays vient de la même réponse ; le Continent s'en déduit ici.
+  const CC_CONT=(function(){const m={},E='Europe',AS='Asie',AF='Afrique',NA='Amérique du Nord',SA='Amérique du Sud',OC='Océanie',AN='Antarctique';
+    const T={
+      Europe:'al ad at ax ba be bg by ch cy cz de dk ee es fi fo fr gb gg gi gr hr hu ie im is it je li lt lu lv mc md me mk mt nl no pl pt ro rs ru se si sk sm ua va xk',
+      Asie:'ae af am az bd bh bn bt cn ge hk id il in iq ir jo jp kg kh kp kr kw kz la lb lk mm mn mo my np om ph pk ps qa sa sg sy th tj tl tm tr tw uz vn ye',
+      Afrique:'ao bf bi bj bw cd cf cg ci cm cv dj dz eg eh er et ga gh gm gn gq gw ke km lr ls ly ma mg ml mr mu mw mz na ne ng re rw sc sd sh sl sn so ss st sz td tg tn tz ug yt za zm zw',
+      'Amérique du Nord':'ag ai aw bb bl bm bs bz ca cr cu cw dm do gd gl gp gt hn ht jm kn ky lc mf mq ms mx ni pa pm pr sv sx tc tt us vc vg vi',
+      'Amérique du Sud':'ar bo br cl co ec fk gf gy pe py sr uy ve',
+      'Océanie':'as au ck fj fm gu ki mh mp nc nf nr nu nz pf pg pn pw sb tk to tv um vu wf ws',
+      'Antarctique':'aq bv gs hm tf'
+    };
+    for(const cont in T)for(const cc of T[cont].split(' '))m[cc]=cont;
+    return m;})();
+  function ccToContinent(cc){return cc?(CC_CONT[String(cc).toLowerCase()]||''):'';}
   function nominatimToRaw(d){if(!d||!d.geojson||!d.osm_id)return null;const g=d.geojson;let poly=null;
     if(g.type==='Polygon')poly=g.coordinates;
     else if(g.type==='MultiPolygon'){poly=[];for(const pg of g.coordinates)for(const ring of pg)poly.push(ring);}
     if(!poly||!poly.length)return null; // Point (pas de polygone) → on ignore, on retentera
     const ad=d.address||{};
-    return {id:'c'+d.osm_id,name:d.name||ad.city||ad.town||ad.village||ad.municipality||'Zone',lvl:+((d.extratags||{}).admin_level)||8,poly:poly,contree:ad.state||ad.region||ad.county||ad.state_district||'',contreeV:2};}  // contree = CANTON (state = découpage OFFICIEL au sommet de chaque pays : canton CH / région FR) ; contreeV=2 = schéma « canton »
+    return {id:'c'+d.osm_id,name:d.name||ad.city||ad.town||ad.village||ad.municipality||'Zone',lvl:+((d.extratags||{}).admin_level)||8,poly:poly,contree:ad.state||ad.region||ad.county||ad.state_district||'',pays:ad.country||'',continent:ccToContinent(ad.country_code),contreeV:3};}  // contree = CANTON (state = découpage OFFICIEL au sommet du pays) ; pays + continent = niveaux SUPÉRIEurs (hiérarchie officielle) ; contreeV=3 = schéma « canton+pays+continent »
   let zonePending=false,lastZoneTry=0;
   function reverseZone(lng,lat){if(zonePending)return;
     if(!isFinite(lat)||lat>90||lat<-90||!isFinite(lng)||lng>180||lng<-180)return; // coords invalides → on ne bloque pas
@@ -791,7 +807,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     // TIMEOUT/abort obligatoire : si Nominatim traîne, on NE reste PAS bloqué (sinon plus aucune contrée ne se charge)
     function finish(){if(done)return;done=true;clearTimeout(to);zonePending=false;osmPending=Math.max(0,osmPending-1);if(osmPending<=0)setLoading(false);}
     const to=setTimeout(function(){try{if(ctrl)ctrl.abort();}catch(_){}finish();},12000);
-    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&polygon_geojson=1&zoom=10&lat='+lat+'&lon='+lng,{headers:{'Accept':'application/json'},signal:ctrl?ctrl.signal:undefined})
+    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&polygon_geojson=1&zoom=10&lat='+lat+'&lon='+lng,{headers:{'Accept':'application/json','Accept-Language':'fr'},signal:ctrl?ctrl.signal:undefined})
       .then(r=>r.ok?r.json():Promise.reject()).then(d=>{const raw=nominatimToRaw(d);if(raw){ingestZoneRaw(raw);zoneCacheAdd(raw);const zz=world._zoneById.get(raw.id);if(zz){zz._contreeTried=true;discoverZone(zz);}}}) // reverse = la zone+Contrée où l'on EST → découverte DIRECTE (fiable même au ras du bord)
       .catch(()=>{}).then(finish);}
   // Dès qu'on n'est PAS dans une contrée déjà chargée → on va chercher sa vraie forme (throttle + anti-doublon)
@@ -803,20 +819,27 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const ll=mToLngLat(state.pl.x,state.pl.y);reverseZone(ll[0],ll[1]);}
   // REMISE À NIVEAU DOUCE des Contrées de l'ancien schéma → CANTON : une zone déjà découverte à la fois, en arrière-plan (throttle 4 s,
   // requête LÉGÈRE sans polygone), sans jamais faire disparaître l'ancien nom tant que le nouveau n'est pas là. Se termine tout seul.
-  let _migT=0;
-  function migrateContree(){if(!world||zonePending)return;
+  let _migT=0,_migBusy=false;
+  function migrateContree(){if(!world||zonePending||_migBusy)return;                // _migBusy : une requête de migration à la fois (jamais de doublon)
     const now=performance.now();if(now-_migT<4000)return;
+    _migT=now;   // throttle armé DÈS qu'on passe → en régime permanent (rien à migrer) on ne re-scanne PAS à chaque frame (économie batterie)
     let target=null;const cur=zoneAt(state.pl.x,state.pl.y);
-    if(cur&&cur.discovered&&cur.contree&&(cur.contreeV||0)<2)target=cur;           // la zone COURANTE d'abord
-    else{for(const id of state.discR){const z=world._zoneById.get(id);if(z&&z.contree&&(z.contreeV||0)<2){target=z;break;}}}
-    if(!target)return;                                                             // plus rien à migrer → terminé
-    _migT=now;const tz=target,ll=mToLngLat(tz.cx,tz.cy);
-    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat='+ll[1]+'&lon='+ll[0],{headers:{'Accept':'application/json'}})
+    if(cur&&cur.discovered&&(cur.contreeV||0)<3)target=cur;                         // la zone COURANTE d'abord
+    else{for(const id of state.discR){const z=world._zoneById.get(id);if(z&&z.discovered&&(z.contreeV||0)<3){target=z;break;}}}
+    if(!target)return;                                                             // plus rien à migrer → terminé (throttle déjà posé)
+    const tz=target,ll=mToLngLat(tz.cx,tz.cy);
+    _migBusy=true;let mdone=false;const ctrl=(function(){try{return new AbortController();}catch(_){return null;}})();
+    function mfin(){if(mdone)return;mdone=true;clearTimeout(mto);_migBusy=false;}   // libère toujours (succès / échec / timeout) → jamais bloqué
+    const mto=setTimeout(function(){try{if(ctrl)ctrl.abort();}catch(_){}mfin();},12000);   // hung socket : on abandonne au bout de 12 s (comme reverseZone)
+    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat='+ll[1]+'&lon='+ll[0],{headers:{'Accept':'application/json','Accept-Language':'fr'},signal:ctrl?ctrl.signal:undefined})
       .then(function(r){return r.ok?r.json():Promise.reject();}).then(function(d){const ad=(d&&d.address)||{};const c=ad.state||ad.region||ad.county||'';
-        tz.contree=c||tz.contree;tz.contreeV=2;if(c)state.discC.add(c);
-        try{const m=zoneCacheRead();if(m[tz.id]){m[tz.id].contree=tz.contree;m[tz.id].contreeV=2;localStorage.setItem(ZCACHE_KEY,JSON.stringify(m));}}catch(_){}
+        const pays=ad.country||'',cont=ccToContinent(ad.country_code);
+        tz.contree=c||tz.contree;tz.pays=pays||tz.pays;tz.continent=cont||tz.continent;tz.contreeV=3;   // remplit canton + PAYS + CONTINENT en un coup
+        if(c)state.discC.add(c);if(pays)state.discPays.add(pays);if(cont)state.discCont.add(cont);       // silencieux (backfill joueur existant → pas de toast rétroactif)
+        try{const m=zoneCacheRead();if(m[tz.id]){m[tz.id].contree=tz.contree;m[tz.id].pays=tz.pays;m[tz.id].continent=tz.continent;m[tz.id].contreeV=3;localStorage.setItem(ZCACHE_KEY,JSON.stringify(m));}}catch(_){}
         dirty=true;if(window.__wake)__wake(400);})
-      .catch(function(){tz._migFail=(tz._migFail||0)+1;if(tz._migFail>=3)tz.contreeV=2;});   // échec réseau : on RÉESSAIE (jusqu'à 3×) avant d'abandonner (garde l'ancien nom)
+      .catch(function(){tz._migFail=(tz._migFail||0)+1;if(tz._migFail>=3)tz.contreeV=3;})   // échec réseau : on RÉESSAIE (jusqu'à 3×) avant d'abandonner (garde l'ancien nom)
+      .then(mfin);
   }
   // ---- Lieux + noms de quartiers INSTANTANÉS depuis les tuiles vectorielles déjà chargées (zéro attente réseau) ----
   // On ne garde que les lieux « à découvrir » (patrimoine, culture, panoramas) — pas les commerces/arrêts de bus.
@@ -911,7 +934,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Sauvegarde SÉPARÉE test/distribuable : la version distribuable démarre TOUJOURS vierge (progression propre),
   // les parties de simulation (test) ne polluent pas ce que verront les vrais joueurs.
   const SAVE_KEY='pas1001_realmap_v3'+(DEV?'':'_prod2');   // _prod2 = remise à zéro de la version distribuable (nouvelle économie d'XP)
-  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',discR:new Set(),discC:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set()};  // discC = CONTRÉES découvertes (grand niveau)
+  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',discR:new Set(),discC:new Set(),discPays:new Set(),discCont:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set()};  // discC = CONTRÉES/cantons ; discPays = PAYS ; discCont = CONTINENTS découverts (grands niveaux)
   const trail=[]; let dirty=false,prevLevel=1,prevTitle=TITLES[0].name;
 
   let saveWarned=false;
@@ -919,7 +942,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // et si ça échoue encore on PRÉVIENT le joueur (jamais d'échec silencieux → perte de progression)
   function save(){const js=JSON.stringify({
     C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo,
-    discR:[...state.discR],discC:[...state.discC],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
+    discR:[...state.discR],discC:[...state.discC],discPays:[...state.discPays],discCont:[...state.discCont],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
     try{localStorage.setItem(SAVE_KEY,js);}
     catch(e){purgeOsmCache(0);
       try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(k.indexOf('pas1001_comm')===0||k.indexOf('pas1001_zones')===0))localStorage.removeItem(k);}}catch(_){} // en dernier recours, sacrifie aussi le cache des contrées/zones
@@ -929,7 +952,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function applySaved(d){
     state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';
     // discR/compR = ids de ZONES réelles ('c'+id). On ignore les anciennes clés Voronoï ('i,j') des sauvegardes d'avant → compteur exact ; reconcileZones() re-révèle depuis les lieux débloqués.
-    (d.discR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.discR.add(k);});(d.discC||[]).forEach(k=>{if(k)state.discC.add(k);});(d.discP||[]).forEach(k=>state.discP.add(k));(d.compR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.compR.add(k);});(d.ach||[]).forEach(k=>state.ach.add(k));(d.visited||[]).forEach(k=>state.visited.add(k));
+    (d.discR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.discR.add(k);});(d.discC||[]).forEach(k=>{if(k)state.discC.add(k);});(d.discPays||[]).forEach(k=>{if(k)state.discPays.add(k);});(d.discCont||[]).forEach(k=>{if(k)state.discCont.add(k);});(d.discP||[]).forEach(k=>state.discP.add(k));(d.compR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.compR.add(k);});(d.ach||[]).forEach(k=>state.ach.add(k));(d.visited||[]).forEach(k=>state.visited.add(k));
     const li=levelInfo(state.xp);prevLevel=li.level;prevTitle=titleForLevel(li.level);
     const cs=document.getElementById('csPseudo');if(cs)cs.value=state.pseudo;
   }
@@ -944,7 +967,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const discToastNames=new Set(); // pour ne pas répéter « Zone découverte » pour un même nom
   // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Zone découverte »)
   function discoverZone(Z){if(!Z)return;loadZoneSites(Z); // vivier COMPLET de la commune où l'on entre/est (zone COURANTE uniquement → pas de rafale de fetch sur TOUTES les communes déjà découvertes)
-    if(Z.contree&&!state.discC.has(Z.contree)){state.discC.add(Z.contree);dirty=true;toast('r','◈','Contrée découverte',shortContree(Z.contree));if(window.__wake)__wake(1600);}  // GRAND niveau — AVANT le guard : se déclenche AUSSI au backfill d'une zone déjà découverte (persistée → jamais re-toastée)
+    if(Z.continent&&!state.discCont.has(Z.continent)){state.discCont.add(Z.continent);dirty=true;toast('r','◈','Continent découvert',Z.continent);if(window.__wake)__wake(1600);}  // niveaux SUPÉRIEurs (continent > pays > contrée) — AVANT le guard : se déclenchent AUSSI au backfill d'une zone déjà découverte (persistée → jamais re-toastée)
+    if(Z.pays&&!state.discPays.has(Z.pays)){state.discPays.add(Z.pays);dirty=true;toast('r','◈','Pays découvert',Z.pays);if(window.__wake)__wake(1600);}
+    if(Z.contree&&!state.discC.has(Z.contree)){state.discC.add(Z.contree);dirty=true;toast('r','◈','Contrée découverte',shortContree(Z.contree));if(window.__wake)__wake(1600);}
     if(state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true;if(window.__wake)__wake(3800); // découvrir une zone = 0 XP ; réveil pour l'anim (brume + houppes + sceaux)
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
@@ -1190,7 +1215,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=86;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=89;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1279,7 +1304,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   resetBtn.onclick=()=>{if(!rArmed){rArmed=true;resetBtn.textContent='Confirmer ?';resetBtn.classList.add('on');rTimer=setTimeout(()=>{rArmed=false;resetBtn.textContent='Effacer';resetBtn.classList.remove('on');},3000);return;}
     clearTimeout(rTimer);rArmed=false;resetBtn.textContent='Effacer';resetBtn.classList.remove('on');
     bgGen++;   // reset → invalide tout replay différé encore en vol (pas de recrédit après effacement)
-    state.discR.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();state.xp=0;state.dist=0;state.stepXpGiven=0;discToastNames.clear();for(const Z of world.communes){Z.discovered=false;Z.rev=1;}
+    state.discR.clear();state.discC.clear();state.discPays.clear();state.discCont.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();state.xp=0;state.dist=0;state.stepXpGiven=0;discToastNames.clear();for(const Z of world.communes){Z.discovered=false;Z.rev=1;}
     state.pl.x=0;state.pl.y=0;trail.length=0;prevLevel=1;prevTitle=TITLES[0].name;control.target=null;control.auto=false;autoBtn.classList.remove('on');autoBtn.textContent='Activer';
     clearRoute();tip=null;curPOI=null;poiPanel.classList.remove('open');follow=true;recenterBtn.classList.remove('show');
     map.setCenter([world.C.lng,world.C.lat]);revealStart();save();hint.classList.remove('gone');toast('r','↺','Atlas effacé','La brume recouvre tout');};
@@ -1289,7 +1314,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       err=>{gpsStat.textContent='Bloqué ('+err.message+')';},{enableHighAccuracy:true,timeout:9000});};
   const searchInput=document.getElementById('searchInput'),searchBtn=document.getElementById('searchBtn');
   function doSearch(){const q=searchInput.value.trim();if(!q)return;searchBtn.textContent='…';
-    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}})
+    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json','Accept-Language':'fr'}})
       .then(r=>r.json()).then(a=>{searchBtn.textContent='OK';if(a&&a[0]){panel.classList.remove('open');goTo(parseFloat(a[0].lon),parseFloat(a[0].lat),a[0].display_name.split(',')[0]);}else toast('r','?','Introuvable','Essaie une autre formulation');})
       .catch(()=>{searchBtn.textContent='OK';toast('r','?','Recherche indisponible','(bloquée en local)');});}
   searchBtn.onclick=doSearch;searchInput.addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
@@ -1325,7 +1350,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     follow=false;recenterBtn.classList.add('show');
     map.flyTo({center:[it.lng,it.lat],zoom:Math.max(map.getZoom(),16.5),duration:900});}
   function markFromSearch(query){searchResults.classList.remove('show');topSearch.blur();searchBarEl.classList.remove('open');topSearch.value='';
-    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(query),{headers:{'Accept':'application/json'}})
+    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(query),{headers:{'Accept':'application/json','Accept-Language':'fr'}})
       .then(r=>r.json()).then(a=>{if(a&&a[0]){const lng=parseFloat(a[0].lon),lat=parseFloat(a[0].lat);placeMarker('drapeau',lng,lat);
         follow=false;recenterBtn.classList.add('show');map.flyTo({center:[lng,lat],zoom:Math.max(map.getZoom(),16),duration:900});}
         else toast('r','?','Adresse introuvable','Essaie une autre formulation');})
@@ -1338,7 +1363,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   function setLocation(lng,lat){const C=[lng,lat];
     initWorld(C);
-    state.pl.x=0;state.pl.y=0;state.xp=0;state.dist=0;state.stepXpGiven=0;state.discR.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();discToastNames.clear();
+    state.pl.x=0;state.pl.y=0;state.xp=0;state.dist=0;state.stepXpGiven=0;state.discR.clear();state.discC.clear();state.discPays.clear();state.discCont.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();discToastNames.clear();
     trail.length=0;prevLevel=1;prevTitle=TITLES[0].name;control.target=null;lastFetch=null;
     clearRoute();tip=null;curPOI=null;poiPanel.classList.remove('open'); // rien ne doit pointer vers l'ancien monde
     follow=true;recenterBtn.classList.remove('show');
@@ -1669,14 +1694,42 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     fctx.strokeStyle='rgba(74,52,33,'+(0.5*av)+')';fctx.lineWidth=0.6;rrect(fctx,cx-w/2,cy-h/2,w,h,h/2);fctx.stroke();
     ornament(cx-w/2-6,cy,-1,av);ornament(cx+w/2+6,cy,1,av);
     fctx.fillStyle='rgba(53,36,15,'+(0.96*av)+')';fctx.fillText(label,cx,cy+0.5);fctx.letterSpacing='0px';}
-  // GRAND cartouche de CONTRÉE (grand niveau) : plus large, liseré OR + double filet → « carte de provinces » au dézoom
-  function cartoucheContree(cx,cy,label,av){if(av<=0)return;fctx.font='700 16px '+FONT_DISPLAY;fctx.letterSpacing='4px';
-    const tw=fctx.measureText(label).width,w=tw+44,h=32;
-    fctx.fillStyle='rgba(243,231,198,'+(0.93*av)+')';rrect(fctx,cx-w/2,cy-h/2,w,h,h/2);fctx.fill();
-    fctx.strokeStyle='rgba(185,138,46,'+(0.9*av)+')';fctx.lineWidth=1.5;rrect(fctx,cx-w/2,cy-h/2,w,h,h/2);fctx.stroke();        // liseré OR
+  // GRAND cartouche de NIVEAU (contrée/pays/continent) : liseré OR + double filet → « carte de provinces » au dézoom.
+  // Paramétré : plus le RANG est élevé (pays > canton, continent > pays), plus fs/ls/h sont GRANDS → le niveau se lit d'un coup d'œil.
+  function cartoucheLevel(cx,cy,label,av,fs,ls,ph,h){if(av<=0)return;fctx.font='700 '+fs+'px '+FONT_DISPLAY;fctx.letterSpacing=ls+'px';
+    const tw=fctx.measureText(label).width,w=tw+ph,r=h/2;
+    fctx.fillStyle='rgba(243,231,198,'+(0.93*av)+')';rrect(fctx,cx-w/2,cy-h/2,w,h,r);fctx.fill();
+    fctx.strokeStyle='rgba(185,138,46,'+(0.92*av)+')';fctx.lineWidth=Math.max(1.4,h*0.048);rrect(fctx,cx-w/2,cy-h/2,w,h,r);fctx.stroke();        // liseré OR (épaissit avec le rang)
     fctx.strokeStyle='rgba(74,52,33,'+(0.38*av)+')';fctx.lineWidth=0.6;rrect(fctx,cx-w/2+2.5,cy-h/2+2.5,w-5,h-5,(h-5)/2);fctx.stroke(); // filet d'encre intérieur
-    ornament(cx-w/2-9,cy,-1,av);ornament(cx+w/2+9,cy,1,av);
+    const oo=h*0.28;ornament(cx-w/2-oo,cy,-1,av);ornament(cx+w/2+oo,cy,1,av);
     fctx.fillStyle='rgba(53,36,15,'+(0.96*av)+')';fctx.fillText(label,cx,cy+0.5);fctx.letterSpacing='0px';}
+  // MESURE un niveau au dézoom : regroupe les communes découvertes par clé (canton/pays/continent), place au CENTROÏDE,
+  // et calcule un « spread » = à quel point le couple d'étiquettes le PLUS SERRÉ est loin du chevauchement.
+  //   spread=1 → bien séparées ; spread=0 → sur le point de se toucher. Sert à faire fondre TOUT le niveau ENSEMBLE
+  //   avant tout chevauchement (jamais « un par un », jamais de superposition). minSep = différences de position
+  //   → INVARIANT par translation (pan) → aucun clignotement.
+  function measureLevel(keyOf,labelOf,fs,ls,ph,bh){
+    const cg={};
+    for(const Zc of world.communes){if(!Zc.discovered)continue;const k=keyOf(Zc);if(!k)continue;const g=cg[k]||(cg[k]={sx:0,sy:0,n:0});g.sx+=Zc.cx;g.sy+=Zc.cy;g.n++;}
+    const list=[];for(const nm in cg)list.push({nm:nm,g:cg[nm]});
+    if(!list.length)return {items:[],spread:1};
+    fctx.font='700 '+fs+'px '+FONT_DISPLAY;fctx.letterSpacing=ls+'px';
+    const items=[];
+    for(const e of list){const c=proj(e.g.sx/e.g.n,e.g.sy/e.g.n);const nm=labelOf(e.nm);
+      items.push({nm:nm,cx:c.x,cy:c.y,bw:fctx.measureText(nm).width+ph});}
+    fctx.letterSpacing='0px';
+    let minSep=Infinity;   // séparation du couple le plus serré : sep<1 ⇒ les boîtes se chevauchent
+    for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){const a=items[i],b=items[j];
+      const sep=Math.max(Math.abs(a.cx-b.cx)/((a.bw+b.bw)/2), Math.abs(a.cy-b.cy)/bh);
+      if(sep<minSep)minSep=sep;}
+    const spread=isFinite(minSep)?clamp((minSep-1.1)/0.5,0,1):1;   // 0 dès qu'on FRÔLE (marge ~10 %), 1 quand bien séparés (≥1.6)
+    return {items:items,spread:spread};
+  }
+  // DESSINE les étiquettes mesurées d'un niveau à UNE SEULE opacité (→ elles apparaissent/s'effacent ENSEMBLE),
+  // culling par le viewport uniquement (pas d'anti-chevauchement par étiquette → plus de disparition « un par un »).
+  function drawLevel(items,fade,fs,ls,ph,bh){if(fade<=0.01)return;
+    for(const it of items){if(it.cx<-it.bw||it.cx>W+it.bw||it.cy<-bh||it.cy>H+bh)continue;
+      cartoucheLevel(it.cx,it.cy,it.nm,fade,fs,ls,ph,bh);}}
   function pill(cx,cy,label){fctx.font='700 9.5px '+FONT_DISPLAY;const tw=fctx.measureText(label).width,w=tw+22,h=18;
     fctx.fillStyle='rgba(243,231,198,0.95)';rrect(fctx,cx-w/2,cy-h/2,w,h,9);fctx.fill();
     fctx.strokeStyle='rgba(138,106,58,0.9)';fctx.lineWidth=0.8;rrect(fctx,cx-w/2,cy-h/2,w,h,9);fctx.stroke();
@@ -1763,20 +1816,22 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     for(const Z of dz){const av=1-Z.rev;const c=proj(Z.cx,Z.cy);
       if(z>=12&&c.x>-160&&c.x<W+160&&c.y>-40&&c.y<H+40&&!shownNames.has(Z.name)){shownNames.add(Z.name);
         cartouche(c.x,c.y,Z.name.toUpperCase()+(state.compR.has(Z.id)?' ★':''),av);}} // masqués au fort dézoom (illisibles)
-    // 1bis) CONTRÉES au DÉZOOM : sous z<12 (noms de communes cachés), le nom de chaque Contrée explorée apparaît en GRAND cartouche or, au CŒUR de son territoire exploré → « carte de provinces » (100% vraies données, aucune requête)
-    if(z<12&&z>3.8){const cg={};
-      for(const Zc of world.communes){if(!Zc.discovered||!Zc.contree)continue;const g=cg[Zc.contree]||(cg[Zc.contree]={sx:0,sy:0,n:0});g.sx+=Zc.cx;g.sy+=Zc.cy;g.n++;}
-      const fade=clamp((11.8-z)/1.3,0,1)*clamp((z-3.9)/0.7,0,1);   // apparaît en dézoomant sous ~11.8, s'efface avant la vue planète (z<4)
-      if(fade>0.01){const list=[];for(const nm in cg)list.push({nm:nm,g:cg[nm]});
-        list.sort(function(a,b){return (b.g.n-a.g.n)||(a.nm<b.nm?-1:a.nm>b.nm?1:0);});   // priorité STABLE : plus explorées d'abord, puis nom → même ordre à CHAQUE frame, indépendant du pan
-        for(const e of list){const c=proj(e.g.sx/e.g.n,e.g.sy/e.g.n);
-          const nm=shortContree(e.nm).toUpperCase();
-          fctx.font='700 16px '+FONT_DISPLAY;fctx.letterSpacing='4px';   // métrique REMISE AVANT CHAQUE mesure : cartoucheContree() sort en laissant letterSpacing='0px' → sinon la largeur mesurée dépendrait de QUELLES contrées ont déjà été dessinées (état canvas contaminé) ⇒ source de clignotement au pan + sous-réservation des boîtes
-          const tw=fctx.measureText(nm).width,bw=tw+44,bh=32,bx={x:c.x-bw/2,y:c.y-bh/2,w:bw,h:bh};
-          if(boxHit(bx))continue;labelBoxes.push(bx);   // ANTI-CHEVAUCHEMENT décidé sur TOUTES les contrées (même HORS écran) : la boîte d'une contrée hors champ reste RÉSERVÉE ⇒ suppression identique frame à frame (invariance par translation de Mercator) → PLUS de clignotement au pan
-          if(c.x<-240||c.x>W+240||c.y<-60||c.y>H+60)continue;   // hors écran : boîte réservée mais NON dessinée (réapparition douce en pannant, sans blink)
-          cartoucheContree(c.x,c.y,nm,fade);}
-        fctx.letterSpacing='0px';}}
+    // 1bis) NIVEAUX AU DÉZOOM (hiérarchie officielle) : en dézoomant, passage de relais Canton → Pays → Continent.
+    //   Chaque niveau est plus GRAND que le précédent (rang lisible d'un coup d'œil). Le relais est piloté par le SERREMENT
+    //   des étiquettes : dès que les cantons commencent à se serrer, TOUT le niveau canton fond ENSEMBLE (une seule opacité)
+    //   AVANT tout chevauchement → jamais « un par un », jamais de superposition. 100 % vraies données officielles.
+    if(z<12&&z>3.0){
+      const mCanton=measureLevel(function(Z){return Z.contree;},  function(n){return shortContree(n).toUpperCase();}, 16,4,44,32);
+      const mPays  =measureLevel(function(Z){return Z.pays;},     function(n){return n.toUpperCase();},               21,5,58,40);
+      const mCont  =measureLevel(function(Z){return Z.continent;},function(n){return n.toUpperCase();},               27,7,72,50);
+      // visibilité de chaque niveau = min(pas trop serré, dans sa plage de zoom) ; cascade : chaque niveau prend la place que le + fin lui laisse
+      const vCanton=Math.min(mCanton.spread, clamp((z-6.6)/0.6,0,1));   // cantons : serrés OU trop dézoomés → cèdent au pays
+      const vPays  =Math.min(mPays.spread,   clamp((z-4.4)/0.6,0,1));   // pays : idem (rarement serré → bascule surtout par zoom)
+      const fCanton=vCanton, fPays=(1-vCanton)*vPays, fCont=(1-vCanton)*(1-vPays)*clamp((z-3.4)/0.4,0,1);
+      drawLevel(mCont.items,  fCont,   27,7,72,50);   // du + GRAND (derrière) au + petit (devant)
+      drawLevel(mPays.items,  fPays,   21,5,58,40);
+      drawLevel(mCanton.items,fCanton, 16,4,44,32);
+    }
     // 2) sceaux/verrous des sites (TOUJOURS dessinés) + collecte des étiquettes candidates
     const nameCands=[];
     if(z>=13.3)for(const Z of dz){const av=1-Z.rev;
