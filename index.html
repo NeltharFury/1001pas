@@ -1030,6 +1030,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const wheelOpen=()=>{const w=wheelEl();return !!(w&&w.classList.contains('open'));};
   let wheelLL=null, suppressClick=false;
   function openWheel(clientX,clientY){try{
+    try{map.stop();}catch(_){}                         // nettoie tout geste/animation caméra MapLibre en cours (évite un état « moving » bloqué → carte figée)
     const w=wheelEl();if(!w)return;const mc=map.getContainer(),rect=mc.getBoundingClientRect();
     const px=clientX-rect.left, py=clientY-rect.top;
     try{wheelLL=map.unproject([px,py]);}catch(_){return;}                       // le marqueur ira au point RÉELLEMENT pressé
@@ -1056,7 +1057,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     setTimeout(()=>{try{document.addEventListener('pointerdown',wheelOutside,{once:true});}catch(_){}},0);
   }catch(e){logErr('openWheel',e);}}
   function wheelOutside(e){try{const w=wheelEl();if(w&&!w.contains(e.target))closeWheel();}catch(err){logErr('wheelOutside',err);}}
-  function closeWheel(){try{const w=wheelEl();if(!w){wheelLL=null;return;}w.classList.remove('open');wheelLL=null; // retrait EN DOUCEUR : on garde le disque le temps de la transition (scale 1→.2), puis on vide — sauf si rouvert entre-temps
+  function closeWheel(){try{map.stop();}catch(_){}   // idem à la fermeture : pas de geste MapLibre bloqué
+    try{const w=wheelEl();if(!w){wheelLL=null;return;}w.classList.remove('open');wheelLL=null; // retrait EN DOUCEUR : on garde le disque le temps de la transition (scale 1→.2), puis on vide — sauf si rouvert entre-temps
     setTimeout(()=>{try{if(!w.classList.contains('open'))w.innerHTML='';}catch(_){}},240);}catch(e){logErr('closeWheel',e);}}
   function placeMarker(type,lng,lat){markers.push({id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4),lng:lng,lat:lat,type:type,ts:Date.now()});saveMarkers();toast('r','✦','Repère posé',MARKER_LABEL[type]||'Repère');if(window.__wake)__wake(900);}
   // Repère du joueur : GOUTTE DE CIRE D'OR (design Fable 5) dont la POINTE désigne le sol — distinct du sceau carmin des sites.
@@ -1125,7 +1127,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=68;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=69;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1772,11 +1774,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // (avant : map.triggerRepaint() à CHAQUE frame → carte re-rendue 60 fps en continu même à l'arrêt → téléphone bouillant).
   function frame(t){
     try{
+      window.__ff=(window.__ff||0)+1;
       const dt=Math.min(0.05,(t-last)/1000);last=t;
       if(ready&&world){const moved=update(dt);if(moved){wake(600);if(follow)map.setCenter(playerLngLat());}
         const active=t<renderUntil||progPanel.classList.contains('open')||(control.joy&&control.joy.active); // qqch à animer ?
         if(active&&t-lastRender>=33){updateHUD();map.triggerRepaint();lastRender=t;lastHud=t;} // GPU actif seulement quand utile, PLAFONNÉ à ~30 fps (moitié moins de charge qu'à 60)
-        else if(!active&&t-lastHud>500){updateHUD();lastHud=t;}}      // à l'arrêt : petit battement HUD (compteur de pas) sans réveiller le GPU
+        else if(!active&&t-lastHud>500){updateHUD();lastHud=t;}      // à l'arrêt : petit battement HUD (compteur de pas) sans réveiller le GPU
+        if(t-(window.__dbgT||0)>250){window.__dbgT=t;var _d=window.__dbgEl||(window.__dbgEl=(function(){var x=document.createElement('div');x.id='dbg';x.style.cssText='position:fixed;top:2px;left:2px;z-index:99998;background:rgba(0,0,0,.62);color:#7CFC00;font:10px/1.25 monospace;padding:2px 5px;border-radius:3px;pointer-events:none';document.body.appendChild(x);return x;})());
+          _d.textContent='f'+window.__ff+' r'+(window.__rr||0)+' mov'+(map.isMoving()?1:0)+' act'+(active?1:0)+' w'+(document.getElementById('markerWheel').classList.contains('open')?1:0);}}   // DIAG écran (temporaire) : f=boucle vivante, r=rendus carte, mov=MapLibre en mouvement, act=fenêtre de rendu, w=roue ouverte
     }catch(e){logErr('frame',e);}
     finally{requestAnimationFrame(frame);}   // RÉ-ARMEMENT GARANTI : plus AUCUNE exception ne peut tuer le moteur (fini le gel total « plus rien ne marche »)
   }
@@ -1913,7 +1918,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   map.on('move',()=>wake(500));map.on('zoom',()=>wake(500));
   try{map.getContainer().addEventListener('pointerdown',()=>wake(1600),{passive:true});}catch(_){}
   // DESSIN du calque calé sur le rendu de la carte (transformée de l'image en cours) → le brouillard/les frontières ne « nagent » plus au zoom/pan
-  map.on('render',()=>{if(ready&&world){try{drawOverlay(performance.now());}catch(e){logErr('overlay',e);}}});   // calque isolé : une frame fautive ne casse plus le pipeline (fini le gel total)
+  map.on('render',()=>{window.__rr=(window.__rr||0)+1;if(ready&&world){try{drawOverlay(performance.now());}catch(e){logErr('overlay',e);}}});   // calque isolé : une frame fautive ne casse plus le pipeline (fini le gel total)
   // ---- Boot ----
   map.on('load',()=>{
     map.on('styleimagemissing',ev=>{try{if(!map.hasImage(ev.id))map.addImage(ev.id,{width:1,height:1,data:new Uint8Array(4)});}catch(_){}});
