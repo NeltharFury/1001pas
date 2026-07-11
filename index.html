@@ -927,7 +927,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const discToastNames=new Set(); // pour ne pas répéter « Zone découverte » pour un même nom
   // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Zone découverte »)
   function discoverZone(Z){if(!Z)return;loadZoneSites(Z); // vivier COMPLET de la commune où l'on entre/est (zone COURANTE uniquement → pas de rafale de fetch sur TOUTES les communes déjà découvertes)
-    if(Z.contree&&!state.discC.has(Z.contree)){state.discC.add(Z.contree);dirty=true;toast('r','◈','Contrée découverte',Z.contree);if(window.__wake)__wake(1600);}  // GRAND niveau — AVANT le guard : se déclenche AUSSI au backfill d'une zone déjà découverte (persistée → jamais re-toastée)
+    if(Z.contree&&!state.discC.has(Z.contree)){state.discC.add(Z.contree);dirty=true;toast('r','◈','Contrée découverte',shortContree(Z.contree));if(window.__wake)__wake(1600);}  // GRAND niveau — AVANT le guard : se déclenche AUSSI au backfill d'une zone déjà découverte (persistée → jamais re-toastée)
     if(state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true;if(window.__wake)__wake(3800); // découvrir une zone = 0 XP ; réveil pour l'anim (brume + houppes + sceaux)
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
@@ -1173,7 +1173,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=83;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=84;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1182,6 +1182,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     {key:'art',label:"Œuvre d'art"},{key:'curio',label:'Curiosité'},{key:'worship',label:'Édifice religieux'},{key:'fountain',label:'Fontaine'}];
   const progPanel=document.getElementById('progPanel');
   // Complétion au niveau CONTRÉE : combien de zones (communes) découvertes / complétées portent cette Contrée
+  // Nom de Contrée RACCOURCI à l'affichage (on garde le nom complet comme clé) : « Arrondissement administratif du Jura bernois » → « Jura bernois », « District du Lac » → « Lac ». Plus court, plus lisible.
+  function shortContree(n){if(!n)return n;
+    var s=String(n).replace(/^(Arrondissement administratif|Arrondissement|District|Canton|Département|Bezirk|Verwaltungskreis|Verwaltungsregion|Communauté d['’]agglomération|Communauté de communes|Communauté urbaine|Métropole|Province|Provincia|County|Regierungsbezirk)\b/i,'')
+      .replace(/^\s*(de\s+la\s+|de\s+l['’]|de\s+|du\s+|des\s+|d['’]|of\s+|di\s+)/i,'').trim();
+    return s||n;}
   function contreeStats(contree){let disc=0,comp=0;if(!contree||!world)return {disc:0,comp:0};
     state.discR.forEach(function(id){const z=world._zoneById.get(id);if(z&&z.contree===contree){disc++;if(state.compR.has(id))comp++;}});
     return {disc:disc,comp:comp};}
@@ -1200,7 +1205,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     }
     // en-tête 2 niveaux : CONTRÉE (surtitre or) + « N zones explorées · M complétées » (complétion de Contrée) puis le nom de ZONE (grand)
     let head='';
-    if(Z.contree){head+='<span class="pz-contree">'+escHtml(Z.contree)+'</span>';
+    if(Z.contree){head+='<span class="pz-contree">'+escHtml(shortContree(Z.contree))+'</span>';
       const cs=contreeStats(Z.contree);
       if(cs.disc>0)head+='<span class="pz-csub">'+cs.disc+' zone'+(cs.disc>1?'s':'')+' explorée'+(cs.disc>1?'s':'')+(cs.comp>0?' · '+cs.comp+' complétée'+(cs.comp>1?'s':''):'')+'</span>';}
     nEl.innerHTML=head+escHtml(Z.name)+(done?' <span class="pz-star">★</span>':'');
@@ -1749,9 +1754,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         fctx.font='700 16px '+FONT_DISPLAY;fctx.letterSpacing='4px';   // même métrique que cartoucheContree pour estimer la boîte
         for(const e of list){const c=proj(e.g.sx/e.g.n,e.g.sy/e.g.n);
           if(c.x<-240||c.x>W+240||c.y<-60||c.y>H+60)continue;
-          const tw=fctx.measureText(e.nm.toUpperCase()).width,bw=tw+44,bh=32,bx={x:c.x-bw/2,y:c.y-bh/2,w:bw,h:bh};
+          const nm=shortContree(e.nm).toUpperCase();
+          const tw=fctx.measureText(nm).width,bw=tw+44,bh=32,bx={x:c.x-bw/2,y:c.y-bh/2,w:bw,h:bh};
           if(boxHit(bx))continue;labelBoxes.push(bx);   // ANTI-CHEVAUCHEMENT (partagé avec les noms de sites) : on saute une Contrée qui en chevauche une déjà posée
-          cartoucheContree(c.x,c.y,e.nm.toUpperCase(),fade);}
+          cartoucheContree(c.x,c.y,nm,fade);}
         fctx.letterSpacing='0px';}}
     // 2) sceaux/verrous des sites (TOUJOURS dessinés) + collecte des étiquettes candidates
     const nameCands=[];
