@@ -1172,7 +1172,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=79;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=80;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1193,8 +1193,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         : (world._zsDone&&world._zsDone.has(Z.id)) ? 'échec réseau ✗' : 'en attente';
       diag=' · '+raw+' recensés · '+zst;
     }
-    const showC=Z.contree&&Z.contree.toLowerCase()!==(Z.name||'').toLowerCase();  // pas de doublon si la Contrée porte le même nom que la Zone
-    nEl.innerHTML=(showC?'<span class="pz-contree">'+escHtml(Z.contree)+'</span>':'')+escHtml(Z.name)+(done?' <span class="pz-star">★</span>':'');  // en-tête 2 niveaux : Contrée (petit, au-dessus) › Zone (grand)
+    nEl.innerHTML=(Z.contree?'<span class="pz-contree">'+escHtml(Z.contree)+'</span>':'')+escHtml(Z.name)+(done?' <span class="pz-star">★</span>':'');  // en-tête 2 niveaux : Contrée (petit, au-dessus) › Zone (grand). Doublon Contrée=Zone toléré (mieux que rien — demande Étienne).
     const pctz=tot?Math.round(got/tot*100):100;
     sEl.textContent=got+' / '+tot+' sites · '+pctz+' %'+diag;
     bEl.style.width=pctz+'%';
@@ -1205,6 +1204,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       h+='<div class="pg-t"><img alt="" src="'+sealDataURL(t.key,24,false)+'"><span class="pt-name">'+escHtml(t.label)+'</span><i></i><b>'+g+' / '+inT.length+'</b></div>';}
     if(!h)h='<div class="cs-note" style="margin:4px 0 0">Aucun site répertorié dans cette zone pour l\'instant.</div>';
     tEl.innerHTML=h;}
+  // Rafraîchit le panneau EN DIRECT tant qu'il est ouvert : dès que la zone/Contrée/complétion change (throttlé, redessine SEULEMENT si la signature change → aucun scintillement)
+  let _progSig='',_progT=0;
+  function refreshProgressIfOpen(){if(!progPanel.classList.contains('open')){_progSig='';return;}
+    const now=performance.now();if(now-_progT<250)return;_progT=now;
+    const Z=zoneAt(state.pl.x,state.pl.y);let sig;
+    if(!Z||!Z.discovered)sig='none';
+    else{const got=(Z.pois||[]).filter(function(p){return state.discP.has(p.id);}).length;sig=Z.id+'|'+got+'|'+((Z.pois||[]).length)+'|'+(Z.contree||'')+'|'+(state.compR.has(Z.id)?1:0);}
+    if(sig!==_progSig){_progSig=sig;renderProgress();}}
   document.getElementById('progBtn').onclick=function(){if(progPanel.classList.contains('open')){progPanel.classList.remove('open');return;} renderProgress();progPanel.classList.add('open');charSheet.classList.remove('open');var sp=document.getElementById('simPanel');if(sp)sp.classList.remove('open');};
   document.getElementById('progClose').onclick=function(){progPanel.classList.remove('open');};
   const csPseudo=document.getElementById('csPseudo');
@@ -1422,6 +1429,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   }
   function update(dt){
     ensureZone(); // va chercher la vraie forme de la contrée où l'on est (si pas déjà chargée)
+    refreshProgressIfOpen(); // panneau de complétion ouvert → se met à jour tout seul quand on change de zone
     for(const Z of world.communes)if(Z.discovered&&Z.rev>0)Z.rev=Math.max(0,Z.rev-dt/CONFIG.fogLift);
     let dx=0,dy=0;
     if(DEV){ // déplacement SIMULÉ (joystick / marche auto / clic-cible) — version TEST uniquement ; en distribuable c'est le GPS qui bouge l'avatar
