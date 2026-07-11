@@ -1025,7 +1025,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const MARKERS_KEY='pas1001_markers'+(DEV?'':'_prod2');
   let markers=[];
   function loadMarkers(){try{const a=JSON.parse(localStorage.getItem(MARKERS_KEY)||'[]');markers=Array.isArray(a)?a.filter(m=>m&&isFinite(m.lng)&&isFinite(m.lat)):[];}catch(_){markers=[];}}
-  function saveMarkers(){try{localStorage.setItem(MARKERS_KEY,JSON.stringify(markers));}catch(_){}}
+  function saveMarkers(){try{localStorage.setItem(MARKERS_KEY,JSON.stringify(markers.map(function(m){return {id:m.id,lng:m.lng,lat:m.lat,type:m.type,ts:m.ts};})));}catch(_){}}  // on ne persiste PAS l'état d'anim transitoire (_pop)
   loadMarkers();
   function svgFor(path,col){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+path+'" fill="none" stroke="'+col+'" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';}
   const wheelEl=()=>document.getElementById('markerWheel');
@@ -1078,7 +1078,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     resetMapGestures();                                // à la fermeture (doigt levé) : garantit que la carte redevient pilotable, même si un handler s'était coincé
     try{const w=wheelEl();if(!w){wheelLL=null;return;}w.classList.remove('open');wheelLL=null; // retrait EN DOUCEUR : on garde le disque le temps de la transition (scale 1→.2), puis on vide — sauf si rouvert entre-temps
     setTimeout(()=>{try{if(!w.classList.contains('open'))w.innerHTML='';}catch(_){}},240);}catch(e){logErr('closeWheel',e);}}
-  function placeMarker(type,lng,lat){markers.push({id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4),lng:lng,lat:lat,type:type,ts:Date.now()});saveMarkers();toast('r','✦','Repère posé',MARKER_LABEL[type]||'Repère');if(window.__wake)__wake(900);}
+  function placeMarker(type,lng,lat){const mk={id:'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4),lng:lng,lat:lat,type:type,ts:Date.now()};mk._pop=performance.now();markers.push(mk);saveMarkers();toast('r','✦','Repère posé',MARKER_LABEL[type]||'Repère');if(window.__wake)__wake(1100);}  // _pop = départ de l'anim « cachet frappé »
   // Repère du joueur : GOUTTE DE CIRE D'OR (design Fable 5) dont la POINTE désigne le sol — distinct du sceau carmin des sites.
   // (x,y) = le point EXACT ; le corps flotte 21px au-dessus, la queue redescend jusqu'au point.
   function drawMarkerDrop(x,y,glyph){var g=fctx;g.save();g.translate(x,y-21);
@@ -1150,7 +1150,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=72;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=73;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1727,11 +1727,19 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         if(p.x<-6||p.x>W+6||p.y<-6||p.y>H+6)continue;
         const a=i/N;fctx.fillStyle=`rgba(140,28,42,${0.12+0.55*a})`;fctx.beginPath();fctx.arc(p.x,p.y,1.9,0,TAU);fctx.fill();}}
     // REPÈRES de l'utilisateur (goutte de cire d'OR) — au-dessus des sites, sous le joueur
-    if(z>=12&&markers.length)for(const mk of markers){let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){continue;}
+    if(z>=12&&markers.length){const _now=performance.now();for(const mk of markers){let mp;try{mp=map.project([mk.lng,mk.lat]);}catch(_){continue;}
       if(mp.x<-24||mp.x>W+24||mp.y<-6||mp.y>H+40)continue;
       const img=markerImg(mk.type);
-      if(img)fctx.drawImage(img,mp.x-16*MK_PX,mp.y-37*MK_PX,MK_BOX_W*MK_PX,MK_BOX_H*MK_PX);   // pointe (unité 0,21) ancrée au point exact
-      else drawMarkerDrop(mp.x,mp.y,MGLYPH_P[mk.type]||MGLYPH_P.drapeau);}
+      const drawMk=()=>{if(img)fctx.drawImage(img,mp.x-16*MK_PX,mp.y-37*MK_PX,MK_BOX_W*MK_PX,MK_BOX_H*MK_PX);else drawMarkerDrop(mp.x,mp.y,MGLYPH_P[mk.type]||MGLYPH_P.drapeau);}; // pointe (unité 0,21) ancrée au point exact
+      // ANIM « cachet frappé » à la pose : le sceau DESCEND, s'ÉCRASE à l'impact (autour de la pointe) et un ANNEAU de cire s'évase — pendant ~430 ms
+      const age=mk._pop!=null?(_now-mk._pop):1e9, POP=430;
+      if(age>=0&&age<POP){const t=age/POP, eo=1-Math.pow(1-t,3);
+        const sc=1.5-0.5*eo-0.10*Math.max(0,Math.sin((t-0.5)/0.5*Math.PI)), al=Math.min(1,age/110);   // 1,5 → 1 + petite compression d'impact
+        fctx.save();fctx.strokeStyle='rgba(176,132,39,'+(0.34*(1-t))+')';fctx.lineWidth=2.4*(1-t)+0.5;fctx.beginPath();fctx.arc(mp.x,mp.y,5+30*eo,0,TAU);fctx.stroke();fctx.restore(); // anneau de cire
+        fctx.save();fctx.globalAlpha=al;fctx.translate(mp.x,mp.y);fctx.scale(sc,sc);fctx.translate(-mp.x,-mp.y);drawMk();fctx.restore();
+        if(window.__wake)__wake(120);
+      } else drawMk();
+    }}
     const PS=proj(state.pl.x,state.pl.y);
     // itinéraire : PERSONNAGE → cible, suit les VRAIES routes (poly OSRM), la portion déjà faite disparaît
     if(route){const rp=proj(route.x,route.y);
