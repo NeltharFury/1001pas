@@ -1173,7 +1173,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=82;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=83;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1744,8 +1744,15 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(z<12&&z>3.8){const cg={};
       for(const Zc of world.communes){if(!Zc.discovered||!Zc.contree)continue;const g=cg[Zc.contree]||(cg[Zc.contree]={sx:0,sy:0,n:0});g.sx+=Zc.cx;g.sy+=Zc.cy;g.n++;}
       const fade=clamp((11.8-z)/1.3,0,1)*clamp((z-3.9)/0.7,0,1);   // apparaît en dézoomant sous ~11.8, s'efface avant la vue planète (z<4)
-      if(fade>0.01)for(const nm in cg){const g=cg[nm],c=proj(g.sx/g.n,g.sy/g.n);
-        if(c.x>-240&&c.x<W+240&&c.y>-60&&c.y<H+60)cartoucheContree(c.x,c.y,nm.toUpperCase(),fade);}}
+      if(fade>0.01){const list=[];for(const nm in cg)list.push({nm:nm,g:cg[nm]});
+        list.sort(function(a,b){return b.g.n-a.g.n;});   // les Contrées les PLUS explorées gagnent la place en priorité
+        fctx.font='700 16px '+FONT_DISPLAY;fctx.letterSpacing='4px';   // même métrique que cartoucheContree pour estimer la boîte
+        for(const e of list){const c=proj(e.g.sx/e.g.n,e.g.sy/e.g.n);
+          if(c.x<-240||c.x>W+240||c.y<-60||c.y>H+60)continue;
+          const tw=fctx.measureText(e.nm.toUpperCase()).width,bw=tw+44,bh=32,bx={x:c.x-bw/2,y:c.y-bh/2,w:bw,h:bh};
+          if(boxHit(bx))continue;labelBoxes.push(bx);   // ANTI-CHEVAUCHEMENT (partagé avec les noms de sites) : on saute une Contrée qui en chevauche une déjà posée
+          cartoucheContree(c.x,c.y,e.nm.toUpperCase(),fade);}
+        fctx.letterSpacing='0px';}}
     // 2) sceaux/verrous des sites (TOUJOURS dessinés) + collecte des étiquettes candidates
     const nameCands=[];
     if(z>=13.3)for(const Z of dz){const av=1-Z.rev;
