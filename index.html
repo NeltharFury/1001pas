@@ -859,10 +859,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function forbiddenFetchBB(bb,cb){
     const q='[out:json][timeout:25];('
       +'way["landuse"="military"]('+bb+');relation["landuse"="military"]('+bb+');'
-      +'way["military"]["military"!~"^(bunker|trench)$"]('+bb+');relation["military"]('+bb+');'   // exclut bunkers/tranchées (minuscules + très denses en CH → risque de tronquer la requête)
+      +'way["military"]["military"!~"^(bunker|trench)$"]('+bb+');relation["military"]["military"!~"^(bunker|trench)$"]('+bb+');'   // relations ALIGNÉES sur les ways (excluent bunkers/tranchées) → plus de fausse zone rouge par une relation
       +'way["amenity"="prison"]('+bb+');relation["amenity"="prison"]('+bb+');'
-      +'way["access"="no"][!highway][!barrier][!building][!amenity][!leisure][!sport]('+bb+');relation["access"="no"][!highway][!building]('+bb+');'
-      +'way["access"~"^(permissive|destination)$"][!highway][!barrier][!building][!amenity][!leisure]('+bb+');relation["access"~"^(permissive|destination)$"][!highway][!building]('+bb+');'
+      +'way["access"="no"][!highway][!barrier][!building][!amenity][!leisure][!sport]('+bb+');relation["access"="no"][!highway][!barrier][!building][!amenity][!leisure][!sport]('+bb+');'
+      +'way["access"~"^(permissive|destination)$"][!highway][!barrier][!building][!amenity][!leisure]('+bb+');relation["access"~"^(permissive|destination)$"][!highway][!barrier][!building][!amenity][!leisure]('+bb+');'
       +');out geom 500;';   // ORANGE = uniquement les vrais tags d'accès « passage » (permissive/destination). PAS leisure=nature_reserve : une réserve/parc régional n'a PAS de restriction d'accès (les gens y vivent/circulent) — ce serait absurde.
     const eps=['https://overpass.osm.ch/api/interpreter','https://overpass-api.de/api/interpreter','https://overpass.openstreetmap.fr/api/interpreter'];
     let done=false,fails=0;const ctrls=eps.map(()=>{try{return new AbortController();}catch(_){return null;}});
@@ -1373,7 +1373,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=125;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=126;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
