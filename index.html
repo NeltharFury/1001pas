@@ -1374,7 +1374,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=128;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=129;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2247,7 +2247,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // pendant l'absence → on les crédite. Ainsi les pas comptent même app fermée (la position/déblocage = Partie B).
   const PED_TOTAL_KEY='pas1001_pedtotal'+(DEV?'':'_prod2');   // séparé test/distribuable, comme la sauvegarde
   const PED_STEP_CAP=60000;                                   // garde-fou : jamais plus de 60 000 pas crédités d'un coup (glitch / très longue absence)
-  let pedLastTotal=(function(){try{var v=localStorage.getItem(PED_TOTAL_KEY);return v==null?null:parseFloat(v);}catch(_){return null;}})();
+  let pedLastTotal=(function(){try{var v=localStorage.getItem(PED_TOTAL_KEY);if(v==null)return null;var pv=parseFloat(v);return isFinite(pv)?pv:null;}catch(_){return null;}})();   // isFinite : une valeur corrompue ('NaN') ne doit pas empoisonner l'ancre à chaque boot
   let pedPending=0, pedFirstCredit=true;                      // pas en attente si la carte n'est pas prête ; 1er crédit = lot « rattrapé »
   function pedSaveTotal(t){try{localStorage.setItem(PED_TOTAL_KEY,String(t));}catch(_){}}
   function pedFlush(){ if(pedPending>0&&world&&ready){ const add=pedPending; pedPending=0; state.dist+=add*0.75;   // 1 pas = 0,75 m
@@ -2256,6 +2256,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       const want=Math.floor(state.dist/0.75), sg=want-(state.stepXpGiven||0); if(sg>0){ state.xp+=sg; state.stepXpGiven=want; }
       dirty=true; afterMove(); if(window.__wake)__wake(900); } }
   function pedCredit(total){                                  // total = pas cumulés depuis le boot
+    if(!isFinite(total))return;                               // NaN/Infini du capteur → ignoré (sinon gained=NaN → pedPending=NaN → pedFlush bloqué = tous les pas de la session perdus)
     if(pedLastTotal==null){ pedLastTotal=total; pedSaveTotal(total); return; }   // 1re fois : on ancre, rien à créditer
     if(total<pedLastTotal){ pedLastTotal=total; pedSaveTotal(total); return; }   // téléphone redémarré (compteur remis à 0) → on réancre sans créditer
     var gained=total-pedLastTotal; if(gained<=0)return;
@@ -2281,7 +2282,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       if(!Ped){window.__ped.err='plugin introuvable';return;}
       window.__ped.plugin=true;
       Ped.addListener('step',function(d){
-        if(d&&typeof d.total==='number'){ window.__ped.total=d.total; pedCredit(d.total); return; } // APK v5+ : cumul fiable (gère aussi les pas app fermée)
+        if(d&&typeof d.total==='number'&&isFinite(d.total)){ window.__ped.total=d.total; pedCredit(d.total); return; } // APK v5+ : cumul fiable (gère aussi les pas app fermée) ; isFinite : rejette un NaN du plugin natif
         var delta=(d&&d.delta)||0; if(delta>0)window.__ped.steps+=delta;                            // repli ancien APK (sans total) : comptage live
         if(delta>0&&world&&ready){state.dist+=delta*0.75;dirty=true;afterMove();}
       });
