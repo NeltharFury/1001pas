@@ -238,6 +238,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #loadChip.show{opacity:1;}
   .ldspin{flex:none;transform-origin:center;animation:ldspin .9s linear infinite;}
   @keyframes ldspin{to{transform:rotate(360deg);}}
+  /* état GPS (acquisition, précision, « autorise la localisation »…) — invisible tant que l'élément n'existait pas → parcours premier lancement muet. Placé BAS-centre pour ne jamais chevaucher #loadChip (haut-centre). */
+  #gpsChip{bottom:20px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 34px);padding:7px 15px;font-size:11.5px;font-style:italic;line-height:1.35;text-align:center;color:var(--ink);opacity:0;transition:opacity .25s;pointer-events:none;}
+  #gpsChip.show{opacity:1;}
+  body.routing #gpsChip{bottom:82px;}   /* remonte au-dessus de la barre d'itinéraire */
   #recenterBtn{width:52px;height:52px;border-radius:50%;border:1px solid rgba(74,52,33,.55);
     background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 6px 16px rgba(40,24,6,.3);
     display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;
@@ -468,6 +472,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <button id="fzOk">Je comprends</button>
   </div></div></div>
   <div id="loadChip" class="hud card"><svg class="ldspin" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="rgba(138,106,58,.28)" stroke-width="3"/><path d="M12 3 a9 9 0 0 1 9 9" fill="none" stroke="#b98a2e" stroke-width="3" stroke-linecap="round"/></svg><span>Chargement des sites…</span></div>
+  <div id="gpsChip" class="hud card" role="status" aria-live="polite"></div>
 
   <div id="poiPanel" class="hud">
     <div class="pp-grab"></div>
@@ -1366,7 +1371,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=119;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=120;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
