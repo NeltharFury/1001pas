@@ -1371,7 +1371,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=121;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=122;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2240,7 +2240,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   let pedLastTotal=(function(){try{var v=localStorage.getItem(PED_TOTAL_KEY);return v==null?null:parseFloat(v);}catch(_){return null;}})();
   let pedPending=0, pedFirstCredit=true;                      // pas en attente si la carte n'est pas prête ; 1er crédit = lot « rattrapé »
   function pedSaveTotal(t){try{localStorage.setItem(PED_TOTAL_KEY,String(t));}catch(_){}}
-  function pedFlush(){ if(pedPending>0&&world&&ready){ state.dist+=pedPending*0.75; pedPending=0; dirty=true; afterMove(); if(window.__wake)__wake(900); } } // 1 pas = 0,75 m → distance + XP
+  function pedFlush(){ if(pedPending>0&&world&&ready){ const add=pedPending; pedPending=0; state.dist+=add*0.75;   // 1 pas = 0,75 m
+      // XP du lot RATTRAPÉ (app fermée) créditée DIRECTEMENT ici : les pas ont été faits à des positions INCONNUES → bénéfice du doute,
+      // jamais coupée par la zone rouge où l'on se trouve en ROUVRANT l'app (fix perte d'XP : marcher dehors, rouvrir dans une base = 0 XP à jamais).
+      const want=Math.floor(state.dist/0.75), sg=want-(state.stepXpGiven||0); if(sg>0){ state.xp+=sg; state.stepXpGiven=want; }
+      dirty=true; afterMove(); if(window.__wake)__wake(900); } }
   function pedCredit(total){                                  // total = pas cumulés depuis le boot
     if(pedLastTotal==null){ pedLastTotal=total; pedSaveTotal(total); return; }   // 1re fois : on ancre, rien à créditer
     if(total<pedLastTotal){ pedLastTotal=total; pedSaveTotal(total); return; }   // téléphone redémarré (compteur remis à 0) → on réancre sans créditer
