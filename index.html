@@ -810,7 +810,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const ZCACHE_KEY='pas1001_zones_v1',ZCACHE_MAX=80;
   function zoneCacheRead(){try{return JSON.parse(localStorage.getItem(ZCACHE_KEY)||'{}')||{};}catch(e){return {};}}
   function zoneCacheAdd(raw){try{const m=zoneCacheRead();m[raw.id]={name:raw.name,lvl:raw.lvl,poly:raw.poly,contree:raw.contree||'',pays:raw.pays||'',continent:raw.continent||'',contreeV:raw.contreeV||0,ts:Date.now()};
-    const ids=Object.keys(m);if(ids.length>ZCACHE_MAX){ids.sort((a,b)=>(m[a].ts||0)-(m[b].ts||0));for(let i=0;i<ids.length-ZCACHE_MAX;i++)delete m[ids[i]];}
+    const ids=Object.keys(m);if(ids.length>ZCACHE_MAX){
+      // évince les NON-DÉCOUVERTES d'abord (elles se re-récupèrent), puis les plus anciennes → une commune EXPLORÉE ne perd plus son polygone
+      // (sinon au boot suivant loadZoneCache n'en ré-ingère que 80 → les plus anciennes découvertes retombent sous la brume).
+      ids.sort((a,b)=>{const da=state.discR.has(a)?1:0,db=state.discR.has(b)?1:0;if(da!==db)return da-db;return (m[a].ts||0)-(m[b].ts||0);});
+      for(let i=0;i<ids.length-ZCACHE_MAX;i++)delete m[ids[i]];}
     localStorage.setItem(ZCACHE_KEY,JSON.stringify(m));}catch(e){}}
   function loadZoneCache(){const m=zoneCacheRead();for(const id in m){const c=m[id];ingestZoneRaw({id:id,name:c.name,lvl:c.lvl,poly:c.poly,contree:c.contree||'',pays:c.pays||'',continent:c.continent||'',contreeV:c.contreeV||0});}}
   // ---- ZONES INTERDITES (aires militaires réelles OSM) — build 90, étape 1 : AFFICHAGE ----
@@ -1374,7 +1378,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=132;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=133;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
