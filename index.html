@@ -1374,7 +1374,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=131;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=132;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1967,7 +1967,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     g.fillStyle=gr;g.fillRect(0,0,160,160);return c;})();
 
   // Tracé d'une ZONE (polygone administratif réel) + test à l'écran + disque de révélation (repli « au pas »)
-  function zonePath(Z){for(const r of Z.rings){if(r.length<3)continue;const p0=proj(r[0][0],r[0][1]);fctx.moveTo(p0.x,p0.y);for(let i=1;i<r.length;i++){const p=proj(r[i][0],r[i][1]);fctx.lineTo(p.x,p.y);}fctx.closePath();}}
+  // PERF : `proj` (= map.project + alloc) n'est appelé qu'UNE fois par zone et par frame ; les 3-5 passes suivantes
+  // (effacement brume, lavis or, frontière, relief) réutilisent les points projetés en cache → bien moins de chauffe en rotation.
+  let _zpFrame=0;
+  function zonePath(Z){
+    if(Z._zpF!==_zpFrame){const c=[];for(const r of Z.rings){if(r.length<3){c.push(null);continue;}const pr=new Array(r.length);for(let i=0;i<r.length;i++)pr[i]=proj(r[i][0],r[i][1]);c.push(pr);}Z._zp=c;Z._zpF=_zpFrame;}
+    const c=Z._zp;for(const pr of c){if(!pr)continue;fctx.moveTo(pr[0].x,pr[0].y);for(let i=1;i<pr.length;i++)fctx.lineTo(pr[i].x,pr[i].y);fctx.closePath();}
+  }
   // Boîte-écran sur les 4 COINS du cadre (pas 2) → correcte même carte TOURNÉE : sinon une zone en bordure sort/rentre du rendu au fil de la rotation = la brume « repop » (flicker).
   function zoneOnScreen(Z){const p0=proj(Z.bb[0],Z.bb[1]),p1=proj(Z.bb[2],Z.bb[1]),p2=proj(Z.bb[2],Z.bb[3]),p3=proj(Z.bb[0],Z.bb[3]);
     const minx=Math.min(p0.x,p1.x,p2.x,p3.x),maxx=Math.max(p0.x,p1.x,p2.x,p3.x),miny=Math.min(p0.y,p1.y,p2.y,p3.y),maxy=Math.max(p0.y,p1.y,p2.y,p3.y);
@@ -1975,6 +1981,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function addDisc(x,y,r){const p=proj(x,y);if(p.x<-r||p.x>W+r||p.y<-r||p.y>H+r)return;fctx.moveTo(p.x+r,p.y);fctx.arc(p.x,p.y,r,0,TAU);}
   function drawOverlay(t){
     if(!ready||!world)return;
+    _zpFrame++;   // invalide le cache de projection des zones : recalculé à la 1re demande de cette frame (la caméra a pu bouger)
     const now=performance.now(),z=map.getZoom();
     fctx.setTransform(dpr,0,0,dpr,0,0);fctx.clearRect(0,0,W,H);
     // ZONES RÉELLES découvertes, visibles à l'écran (formes de commune/quartier OSM = unité de révélation)
