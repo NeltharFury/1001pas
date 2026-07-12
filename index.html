@@ -1362,7 +1362,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=116;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=117;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1570,7 +1570,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!Td.length||!Nd.length)return false;const setN=new Set(Nd),shared=Td.filter(w=>setN.has(w));
     if(!shared.length)return false;return (shared.length/Td.length)>=0.6 && (shared.length/Nd.length)>=0.5;}
   const wikiURL=(lang,title)=>'https://'+lang+'.wikipedia.org/wiki/'+encodeURIComponent(title.replace(/ /g,'_'));
-  function wikiGet(lang,title){return fetch('https://'+lang+'.wikipedia.org/api/rest_v1/page/summary/'+encodeURIComponent(title.replace(/ /g,'_')))
+  const LANG_OK=/^[a-z]{2,12}(-[a-z0-9]{2,10})?$/i;   // code langue Wikipédia (fr, en, de, zh-classical…) — bloque tout hôte injecté (evil.com/x#) via un tag OSM wikipedia= malveillant
+  function wikiGet(lang,title){if(!LANG_OK.test(lang))return Promise.reject();return fetch('https://'+lang+'.wikipedia.org/api/rest_v1/page/summary/'+encodeURIComponent(title.replace(/ /g,'_')))
     .then(r=>r.ok?r.json():Promise.reject()).then(j=>{if(j.type&&j.type.indexOf('disambiguation')>=0)return Promise.reject();
       const t=(j.extract||'').trim();if(!t)return Promise.reject();
       const url=(j.content_urls&&j.content_urls.desktop&&j.content_urls.desktop.page)||wikiURL(lang,title);
@@ -1598,7 +1599,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function showStory(r){const txt=(r.text||'').trim(),m=txt.match(/^[A-Za-zÀ-ÖØ-öø-ÿŒœ]/);
     if(m)poiBody.innerHTML='<span class="lettrine">'+escHtml(m[0])+'</span>'+escHtml(txt.slice(1));else poiBody.textContent=txt;
     if(r.srcLabel){poiSrc.classList.remove('hidden');
-      poiSrc.innerHTML='Source : '+(r.srcUrl?'<a href="'+escHtml(r.srcUrl)+'" target="_blank" rel="noopener">'+escHtml(r.srcLabel)+'</a>':escHtml(r.srcLabel));}
+      const safeUrl=(r.srcUrl&&/^https:\/\//i.test(r.srcUrl))?r.srcUrl:null;   // 2e barrière : jamais de href javascript:/data: (escHtml n'échappe pas le SCHÉMA) → seule une vraie URL https est cliquable
+      poiSrc.innerHTML='Source : '+(safeUrl?'<a href="'+escHtml(safeUrl)+'" target="_blank" rel="noopener">'+escHtml(r.srcLabel)+'</a>':escHtml(r.srcLabel));}
     else poiSrc.classList.add('hidden');}
   function openPOI(P,R){poiPanel.classList.add('open');curPOI=P;
     const unlocked=state.discP.has(P.id);
