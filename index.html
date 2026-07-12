@@ -1071,7 +1071,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function critAlert(msg){var c=document.getElementById('critAlert');if(!c)return;if(msg){c.textContent=msg;c.classList.add('show');}else c.classList.remove('show');}   // bandeau on-écran pour les alertes critiques (ne dépend PAS de la permission notifications)
   // la sauvegarde de la PROGRESSION est prioritaire : si le stockage est plein, on sacrifie le cache OSM,
   // et si ça échoue encore on PRÉVIENT le joueur (jamais d'échec silencieux → perte de progression)
-  function save(){const js=JSON.stringify({
+  function save(){if(!world)return;const js=JSON.stringify({   // garde : dirty peut être vrai avant l'init du monde → sans ça, world.C.lng jetterait en boucle
     C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck, rotMap:!!state.rotMap, gf:!!state.gpsFounded,
     discR:[...state.discR],discC:[...state.discC],discPays:[...state.discPays],discCont:[...state.discCont],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
     try{localStorage.setItem(SAVE_KEY,js);}
@@ -1223,7 +1223,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const MARKERS_KEY='pas1001_markers'+(DEV?'':'_prod2');
   let markers=[];
   function loadMarkers(){try{const a=JSON.parse(localStorage.getItem(MARKERS_KEY)||'[]');markers=Array.isArray(a)?a.filter(m=>m&&isFinite(m.lng)&&isFinite(m.lat)):[];}catch(_){markers=[];}}
-  function saveMarkers(){try{localStorage.setItem(MARKERS_KEY,JSON.stringify(markers.map(function(m){return {id:m.id,lng:m.lng,lat:m.lat,type:m.type,ts:m.ts,name:m.name||undefined};})));}catch(_){}}  // persiste id/pos/type/nom ; PAS l'état d'anim transitoire (_pop)
+  function saveMarkers(){const js=JSON.stringify(markers.map(function(m){return {id:m.id,lng:m.lng,lat:m.lat,type:m.type,ts:m.ts,name:m.name||undefined};}));   // persiste id/pos/type/nom ; PAS l'état d'anim transitoire (_pop)
+    try{localStorage.setItem(MARKERS_KEY,js);}
+    catch(_){try{purgeOsmCache(20);localStorage.setItem(MARKERS_KEY,js);}   // quota plein → on libère du cache OSM et on réessaie
+      catch(__){toast('r','⚠','Repère non sauvegardé','Stockage plein — libère de l\'espace');critAlert('⚠ Un repère n\'a pas pu être sauvegardé (stockage plein).');}}}
   loadMarkers();
   function svgFor(path,col){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+path+'" fill="none" stroke="'+col+'" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';}
   const wheelEl=()=>document.getElementById('markerWheel');
@@ -1394,7 +1397,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=138;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=139;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2390,7 +2393,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     bootHadSave=!!saved;                  // nouveau joueur vs joueur existant → le 1er relevé GPS refonde ou conserve
     const C=(saved&&saved.C)?saved.C:CONFIG.defaultCenter;
     initWorld(C);
-    if(saved)applySaved(saved);
+    if(saved){try{applySaved(saved);}catch(e){logErr('applySaved',e);try{localStorage.setItem(SAVE_KEY+'_bak',JSON.stringify(saved));localStorage.removeItem(SAVE_KEY);}catch(_){}}}   // sauvegarde corrompue / schéma inattendu → mise de côté (_bak) au lieu de bloquer tout le boot
     syncRotUI();   // reflète l'option « carte orientée » chargée sur le bouton (bearing s'appliquera au 1er déplacement)
     map.setCenter(playerLngLat());map.setZoom(CONFIG.defaultZoom);
     ready=true;wake(2500);               // premier rendu + révélation initiale
