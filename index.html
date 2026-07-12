@@ -1373,7 +1373,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=124;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=125;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2223,7 +2223,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     gpsChip(gpsLabel(acc), acc>40 || state.dist<25); // reste affiché si précision faible ; sinon se cache après 25 m parcourus
   }
   function onGeoErr(err){clearTimeout(geoWatchdog);
-    if(err&&err.code===1)notify('1001 Pas','Autorise la localisation (précise) pour explorer en marchant.');
+    if(err&&err.code===1){notify('1001 Pas','Autorise la localisation (précise) pour explorer en marchant.');
+      gpsChip('Localisation refusée — autorise-la (🔒) puis touche « Me recentrer »',true);
+      try{if(geoWatch!=null)navigator.geolocation.clearWatch(geoWatch);}catch(_){}geoWatch=null;   // libère le watch → le bouton « Me recentrer » (startGeo) peut VRAIMENT relancer le GPS après que l'utilisateur a autorisé (sinon startGeo restait un no-op définitif). NB : on NE touche PAS à geoFirst (sinon re-fondation du monde si permission révoquée en cours de session)
+    }
   }
   function startGeo(){
     if(geoWatch!=null)return;
