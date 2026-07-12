@@ -907,23 +907,27 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!poly||!poly.length)return null; // Point (pas de polygone) → on ignore, on retentera
     const ad=d.address||{};
     return {id:'c'+d.osm_id,name:d.name||ad.city||ad.town||ad.village||ad.municipality||'Zone',lvl:+((d.extratags||{}).admin_level)||8,poly:poly,contree:ad.state||ad.region||ad.county||ad.state_district||'',pays:ad.country||'',continent:ccToContinent(ad.country_code),contreeV:3};}  // contree = CANTON (state = découpage OFFICIEL au sommet du pays) ; pays + continent = niveaux SUPÉRIEurs (hiérarchie officielle) ; contreeV=3 = schéma « canton+pays+continent »
-  let zonePending=false,lastZoneTry=0;
+  let zonePending=false,lastZoneTry=0,zoneFail=0,zoneNextTry=0,zoneTryPos=null;
   function reverseZone(lng,lat){if(zonePending)return;
     if(!isFinite(lat)||lat>90||lat<-90||!isFinite(lng)||lng>180||lng<-180)return; // coords invalides → on ne bloque pas
     zonePending=true;osmPending++;setLoading(true);
-    let done=false;const ctrl=(function(){try{return new AbortController();}catch(_){return null;}})();
+    let done=false,ok=false;const ctrl=(function(){try{return new AbortController();}catch(_){return null;}})();
     // TIMEOUT/abort obligatoire : si Nominatim traîne, on NE reste PAS bloqué (sinon plus aucune contrée ne se charge)
-    function finish(){if(done)return;done=true;clearTimeout(to);zonePending=false;osmPending=Math.max(0,osmPending-1);if(osmPending<=0)setLoading(false);}
+    function finish(){if(done)return;done=true;clearTimeout(to);zonePending=false;osmPending=Math.max(0,osmPending-1);if(osmPending<=0)setLoading(false);
+      if(ok){zoneFail=0;zoneNextTry=0;}   // succès → plus de backoff
+      else{zoneFail=Math.min(zoneFail+1,6);zoneNextTry=performance.now()+Math.min(300000,7500*Math.pow(2,zoneFail));}}   // ÉCHEC (réseau coupé / géométrie Point / « unable to geocode ») → backoff exponentiel 15 s→5 min : fini le retry toutes les 1,5 s à l'infini (= risque de ban Nominatim pour TOUS les joueurs + batterie)
     const to=setTimeout(function(){try{if(ctrl)ctrl.abort();}catch(_){}finish();},12000);
     fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&polygon_geojson=1&zoom=10&lat='+lat+'&lon='+lng,{headers:{'Accept':'application/json','Accept-Language':'fr'},signal:ctrl?ctrl.signal:undefined})
-      .then(r=>r.ok?r.json():Promise.reject()).then(d=>{const raw=nominatimToRaw(d);if(raw){ingestZoneRaw(raw);zoneCacheAdd(raw);const zz=world._zoneById.get(raw.id);if(zz){zz._contreeTried=true;discoverZone(zz);}}}) // reverse = la zone+Contrée où l'on EST → découverte DIRECTE (fiable même au ras du bord)
+      .then(r=>r.ok?r.json():Promise.reject()).then(d=>{const raw=nominatimToRaw(d);if(raw){ingestZoneRaw(raw);zoneCacheAdd(raw);const zz=world._zoneById.get(raw.id);if(zz){zz._contreeTried=true;discoverZone(zz);}ok=true;}}) // reverse = la zone+Contrée où l'on EST → découverte DIRECTE (fiable même au ras du bord)
       .catch(()=>{}).then(finish);}
-  // Dès qu'on n'est PAS dans une contrée déjà chargée → on va chercher sa vraie forme (throttle + anti-doublon)
+  // Dès qu'on n'est PAS dans une contrée déjà chargée → on va chercher sa vraie forme (throttle + anti-doublon + backoff sur échec)
   function ensureZone(){if(!world||zonePending)return;
     if(!DEV&&geoFirst)return; // distribuable : AUCUNE découverte tant qu'on n'a pas un VRAI relevé GPS (sinon on révèle le centre par défaut = « contrée fantôme »)
     const Z0=zoneAt(state.pl.x,state.pl.y);
     if(Z0&&(Z0.contree||Z0._contreeTried))return; // dans une zone qui connaît DÉJÀ sa Contrée (ou déjà tentée) → rien ; sinon on (re)interroge pour BACKFILLER la Contrée (joueur existant, cache d'avant)
-    const now=performance.now();if(now-lastZoneTry<1500)return;lastZoneTry=now;
+    const now=performance.now();
+    if(zoneTryPos&&Math.hypot(state.pl.x-zoneTryPos.x,state.pl.y-zoneTryPos.y)>250){zoneFail=0;zoneNextTry=0;}   // le joueur a changé de secteur → le backoff (échecs de l'ancien) ne s'applique plus
+    if(now<zoneNextTry||now-lastZoneTry<1500)return;lastZoneTry=now;zoneTryPos={x:state.pl.x,y:state.pl.y};
     const ll=mToLngLat(state.pl.x,state.pl.y);reverseZone(ll[0],ll[1]);}
   // REMISE À NIVEAU DOUCE des Contrées de l'ancien schéma → CANTON : une zone déjà découverte à la fois, en arrière-plan (throttle 4 s,
   // requête LÉGÈRE sans polygone), sans jamais faire disparaître l'ancien nom tant que le nouveau n'est pas là. Se termine tout seul.
@@ -1362,7 +1366,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=117;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=118;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
