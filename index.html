@@ -1394,7 +1394,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=137;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=138;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2346,8 +2346,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     var end=pts[pts.length-1]; state.pl.x=end.x; state.pl.y=end.y; if(follow){try{map.setCenter([end.lng,end.lat]);}catch(_){}} // on finit là où on est vraiment
     maybeFetchArea();
     if(need.length){ reverseZone(need[need.length-1].lng,need[need.length-1].lat);          // n'envoie QUE la position finale à Nominatim (pas toute la trace)
-      setTimeout(function(){if(bgGen!==myGen)return;var r=replayUnlockPass(pts);if(r.z||r.s){dirty=true;save();bgToast(r.z,r.s);}},2000);
-      setTimeout(function(){if(bgGen!==myGen)return;var r=replayUnlockPass(pts);if(r.z||r.s){dirty=true;save();bgToast(r.z,r.s);}},4500); }
+      // Re-passes ÉTALÉES jusqu'à ~70 s (au lieu de 2 passes fixes à 2 s / 4,5 s) : laisse le temps aux données LENTES d'arriver
+      // (reverseZone timeout 12 s + Overpass des sites, plusieurs s à min) → beaucoup moins de déblocages « app fermée » perdus.
+      [2000,4500,9000,16000,28000,45000,70000].forEach(function(ms){
+        setTimeout(function(){if(bgGen!==myGen)return;var r=replayUnlockPass(pts);if(r.z||r.s){dirty=true;save();bgToast(r.z,r.s);}},ms);
+      }); }
     dirty=true; save();
     var zones=state.discR.size-z0, sites=state.discP.size-s0; bgToast(zones,sites);
     return {zones:zones,sites:sites}; }
