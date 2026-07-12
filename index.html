@@ -1041,12 +1041,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!isFinite(spanLng)||!isFinite(spanLat)||Math.max(spanLng,spanLat)>14000){world._zsDone.add(z.id);return;} // démesuré/invalide → done, le chargement par position gère
     const ck='pas1001_osm_z3_'+z.id;                      // v3 (invalide les caches partiels/tronqués d'avant, dont le « 67 » figé) ; namespace 'pas1001_osm_' → purgeOsmCache gère
     let cached=null;try{cached=JSON.parse(localStorage.getItem(ck)||'null');}catch(e){}
-    if(cached&&cached.pois&&cached.pois.length){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=cached.pois.length;setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z)ingestOSM(cached,z.id);},0);return;} // ingest différé (anti ré-entrance depuis reindexPois) ; forZone=z.id → rattachement déterministe
+    if(cached&&cached.pois&&cached.pois.length){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=cached.pois.length;setTimeout(()=>{if(world&&world._zoneById.get(z.id)===z){ingestOSM(cached,z.id);checkZoneComplete(z);}},0);return;} // ingest différé (anti ré-entrance depuis reindexPois) ; forZone=z.id → rattachement déterministe ; check complétion si le vivier complet révèle que tout est déjà découvert
     if(world._zsBusy.size>=2){zoneRetry(z,1500);return;} // throttle : au plus 2 fetch // → relance PAR TIMER (jamais par le mouvement)
     world._zsBusy.add(z.id);
     const bb=sw[1]+','+sw[0]+','+ne[1]+','+ne[0];         // Overpass = south,west,north,east
     overpassFetchBB(bb,d=>{ world._zsBusy.delete(z.id);
-      if(d){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=(d.pois?d.pois.length:0);ingestOSM(d,z.id);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
+      if(d){world._zsDone.add(z.id);z._sitesFull=true;z._sitesFetched=(d.pois?d.pois.length:0);ingestOSM(d,z.id);checkZoneComplete(z);try{d.ts=Date.now();localStorage.setItem(ck,JSON.stringify(d));if(osmKeys().length>OSM_CACHE_MAX)purgeOsmCache(OSM_CACHE_MAX);}catch(e){purgeOsmCache(20);try{localStorage.setItem(ck,JSON.stringify(d));}catch(_){}}}
       else{z._zsTry=(z._zsTry||0)+1;if(z._zsTry<=12)zoneRetry(z,Math.min(60000,4000+z._zsTry*5000));else world._zsDone.add(z.id);} // ÉCHEC → retry borné (12×, backoff jusqu'à 60s ≈ 8 min) : si Overpass est momentanément down, ça se répare TOUT SEUL à son retour ; après 12 → abandon session (repli vivier par position ; re-tenté au prochain chargement)
     });
   }
@@ -1098,10 +1098,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
   function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
+  // « Zone complétée » : SEULEMENT si le vivier Overpass COMPLET est chargé (`_sitesFull`) — sinon on complèterait 1-2 sites de l'aperçu
+  // TUILES avant l'arrivée des vraies données → fausse complétion + bonus XP indus, persistés. Appelée à la découverte d'un site ET à l'arrivée du vivier complet.
+  function checkZoneComplete(Z){if(Z&&Z._sitesFull&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);const bonus=Z.pois.length*CONFIG.xp.completePerSite;state.xp+=bonus;dirty=true;toast('r','★','Zone complétée !',Z.name+' · +'+bonus+' XP');if(window.__wake)__wake(1000);}}
   function reachPOI(P,Z,silent){const _fz=inForbidden(P.x,P.y);if(_fz&&_fz.kind==='forbidden')return;   // sécurité : jamais débloquer un site dans une zone INTERDITE (rouge) ; en zone de PASSAGE (orange) les sites restent visitables
     state.discP.add(P.id);P.tSeal=performance.now();const gain=tierXP(P);state.xp+=gain;dirty=true;if(window.__wake)__wake(1000); // réveil pour l'anim du sceau
     if(!silent)toast('poi',POI_GLYPH[P.g]||'✦','Site découvert +'+gain+' XP',P.n);
-    if(Z&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);const bonus=Z.pois.length*CONFIG.xp.completePerSite;state.xp+=bonus;toast('r','★','Zone complétée !',Z.name+' · +'+bonus+' XP');}
+    checkZoneComplete(Z);
     checkAch();}
 
   // ---- Carte ----
@@ -1378,7 +1381,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=133;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=134;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
