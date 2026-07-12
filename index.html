@@ -1374,7 +1374,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=129;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=130;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2221,6 +2221,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       else{geoQuar={x:m.x,y:m.y};gpsChip(gpsLabel(acc),true);return;}                            // 1er saut → quarantaine, on ne bouge pas
     } else geoQuar=null;
     state.pl.x=m.x;state.pl.y=m.y;
+    if(step<Math.max(CONFIG.gps.minStep,(isFinite(acc)?acc:0)*0.5)){state._hsx=m.x;state._hsy=m.y;}   // micro-jitter GPS (< bruit de précision) → ré-ancre le CAP sur place SANS produire de direction : la « carte orientée » ne pivote plus toute seule à l'arrêt (trackHeadingFrame verra 0 dérive)
     if(!NATIVE && step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // web : distance estimée du GPS. En natif : les pas viennent du podomètre (le GPS ne sert qu'à la position)
     dirty=true;afterMove();
     if(step>=CONFIG.gps.minStep){if(follow)map.setCenter(playerLngLat());if(window.__wake)__wake(900);} // vrai déplacement SEULEMENT → recentre + réveille le rendu. Le micro-tremblement GPS à l'arrêt ne recentre plus et ne réveille plus → fini la chauffe immobile (avant : setCenter à chaque relevé → move → réveil ~1×/s).
