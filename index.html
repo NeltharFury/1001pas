@@ -1373,7 +1373,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=123;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=124;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2024,8 +2024,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       const clipZ=[];for(const Z of dz){for(const F of world.forbidden){if(Z.bb[2]<F.bb[0]||Z.bb[0]>F.bb[2]||Z.bb[3]<F.bb[1]||Z.bb[1]>F.bb[3])continue;clipZ.push(Z);break;}}
       if(clipZ.length){fctx.save();
       fctx.beginPath();for(const Z of clipZ)zonePath(Z);fctx.clip();   // on ne dessine QUE dans les zones découvertes → rien ne fuite dans l'inexploré
-      for(const F of world.forbidden){const a=proj(F.bb[0],F.bb[1]),bp=proj(F.bb[2],F.bb[3]);
-        if(Math.max(a.x,bp.x)<-20||Math.min(a.x,bp.x)>W+20||Math.max(a.y,bp.y)<-20||Math.min(a.y,bp.y)>H+20)continue;
+      for(const F of world.forbidden){const c0=proj(F.bb[0],F.bb[1]),c1=proj(F.bb[2],F.bb[1]),c2=proj(F.bb[2],F.bb[3]),c3=proj(F.bb[0],F.bb[3]);   // 4 COINS → cull correct carte TOURNÉE (fini le flicker des hachures en bordure, cf. fix zoneOnScreen)
+        const mnx=Math.min(c0.x,c1.x,c2.x,c3.x),mxx=Math.max(c0.x,c1.x,c2.x,c3.x),mny=Math.min(c0.y,c1.y,c2.y,c3.y),mxy=Math.max(c0.y,c1.y,c2.y,c3.y);
+        if(mxx<-20||mnx>W+20||mxy<-20||mny>H+20)continue;
         const pass=F.kind==='passage';   // ROUGE = interdit, ORANGE = passage
         fctx.beginPath();for(const r of F.rings){if(r.length<3)continue;const p0=proj(r[0][0],r[0][1]);fctx.moveTo(p0.x,p0.y);for(let i=1;i<r.length;i++){const p=proj(r[i][0],r[i][1]);fctx.lineTo(p.x,p.y);}fctx.closePath();}
         fctx.fillStyle=pass?'rgba(176,132,39,0.12)':'rgba(164,36,59,0.12)';fctx.fill();fctx.fillStyle=forbiddenHatch(pass?'passage':'forbidden');fctx.fill();   // fond léger + hachures (couleur du type)
