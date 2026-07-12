@@ -918,6 +918,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function reverseZone(lng,lat){if(zonePending)return;
     if(!isFinite(lat)||lat>90||lat<-90||!isFinite(lng)||lng>180||lng<-180)return; // coords invalides → on ne bloque pas
     zonePending=true;osmPending++;setLoading(true);
+    const myGen=bgGen;   // génération du monde au départ : si un reset / changement de ville survient avant la réponse, on l'ignore (sinon découverte+persistance d'une commune de l'ANCIEN endroit dans le nouveau monde = zone fantôme)
     let done=false,ok=false;const ctrl=(function(){try{return new AbortController();}catch(_){return null;}})();
     // TIMEOUT/abort obligatoire : si Nominatim traîne, on NE reste PAS bloqué (sinon plus aucune contrée ne se charge)
     function finish(){if(done)return;done=true;clearTimeout(to);zonePending=false;osmPending=Math.max(0,osmPending-1);if(osmPending<=0)setLoading(false);
@@ -925,7 +926,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       else{zoneFail=Math.min(zoneFail+1,6);zoneNextTry=performance.now()+Math.min(300000,7500*Math.pow(2,zoneFail));}}   // ÉCHEC (réseau coupé / géométrie Point / « unable to geocode ») → backoff exponentiel 15 s→5 min : fini le retry toutes les 1,5 s à l'infini (= risque de ban Nominatim pour TOUS les joueurs + batterie)
     const to=setTimeout(function(){try{if(ctrl)ctrl.abort();}catch(_){}finish();},12000);
     fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&polygon_geojson=1&zoom=10&lat='+lat+'&lon='+lng,{headers:{'Accept':'application/json','Accept-Language':'fr'},signal:ctrl?ctrl.signal:undefined})
-      .then(r=>r.ok?r.json():Promise.reject()).then(d=>{const raw=nominatimToRaw(d);if(raw){ingestZoneRaw(raw);zoneCacheAdd(raw);const zz=world._zoneById.get(raw.id);if(zz){zz._contreeTried=true;discoverZone(zz);}ok=true;}}) // reverse = la zone+Contrée où l'on EST → découverte DIRECTE (fiable même au ras du bord)
+      .then(r=>r.ok?r.json():Promise.reject()).then(d=>{if(bgGen!==myGen)return;const raw=nominatimToRaw(d);if(raw){ingestZoneRaw(raw);zoneCacheAdd(raw);const zz=world._zoneById.get(raw.id);if(zz){zz._contreeTried=true;discoverZone(zz);}ok=true;}}) // garde de génération : réponse périmée (reset/nouvelle ville) ignorée. reverse = la zone+Contrée où l'on EST → découverte DIRECTE (fiable même au ras du bord)
       .catch(()=>{}).then(finish);}
   // Dès qu'on n'est PAS dans une contrée déjà chargée → on va chercher sa vraie forme (throttle + anti-doublon + backoff sur échec)
   function ensureZone(){if(!world||zonePending)return;
@@ -1373,7 +1374,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=126;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=127;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
