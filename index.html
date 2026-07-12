@@ -1398,7 +1398,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=140;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=141;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1628,7 +1628,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       chain=wikiGet(lang,title).catch(()=>P.wd?wikidataStory(P.wd):Promise.reject()).catch(()=>descStory(P)).catch(()=>geoStory(P));}
     else if(P.wd)chain=wikidataStory(P.wd).catch(()=>descStory(P)).catch(()=>geoStory(P));
     else chain=descStory(P).catch(()=>geoStory(P));
-    return chain.then(r=>{P._story=r;return r;});}
+    return Promise.race([chain,new Promise((_,rej)=>setTimeout(()=>rej('timeout'),10000))]).then(r=>{P._story=r;return r;});}   // timeout 10 s : si le réseau traîne, le .catch appelant affiche la fiche de repli au lieu d'un « Chargement… » infini
   function fallbackStory(P,R){return {text:'Aucune notice encyclopédique publique n\'est rattachée à ce site pour l\'instant. Ce que la carte en sait : '+(P.type||'site').toLowerCase()+(R?' — '+R.name:'')+'.',
     srcLabel:'OpenStreetMap',srcUrl:'https://www.openstreetmap.org'};}
   let curPOI=null;
@@ -1677,7 +1677,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function wanderTarget(){const a=Math.random()*TAU,d=200+Math.random()*400;return{x:state.pl.x+Math.cos(a)*d,y:state.pl.y+Math.sin(a)*d};}
   // recharge OSM autour du joueur au fil de l'exploration (enrichit noms + lieux partout)
   function maybeFetchArea(){if(!world)return;const p=state.pl;if(lastFetch&&Math.hypot(p.x-lastFetch.x,p.y-lastFetch.y)<CONFIG.osm.refetch)return;
-    lastFetch={x:p.x,y:p.y};const ll=mToLngLat(p.x,p.y);loadArea([ll[0],ll[1]]);} // les contrées (zones) sont gérées par ensureZone()
+    lastFetch={x:p.x,y:p.y};const ll=mToLngLat(p.x,p.y);
+    loadArea([ll[0],ll[1]],function(ok){if(!ok&&lastFetch&&lastFetch.x===p.x&&lastFetch.y===p.y)lastFetch=null;});} // échec après 6 essais → ré-arme lastFetch (sinon le secteur n'est JAMAIS rechargé) ; les contrées sont gérées par ensureZone()
   // Suite d'un déplacement (traînée, découverte de contrée, sites atteints, itinéraire, succès) —
   // PARTAGÉE par la SIMULATION (joystick, version test) et le VRAI GPS (watchPosition, version distribuable).
   function afterMove(){
