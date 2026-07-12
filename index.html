@@ -1188,11 +1188,16 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const routePas=()=>route?Math.round((route._remain!=null?route._remain:(route.dist!=null?route.dist:Math.hypot(route.x-state.pl.x,route.y-state.pl.y)))/0.75):0;
   function fetchRoute(tx,ty){const a=playerLngLat(),b=mToLngLat(tx,ty);
     const url='https://routing.openstreetmap.de/routed-foot/route/v1/foot/'+a[0]+','+a[1]+';'+b[0]+','+b[1]+'?overview=full&geometries=geojson';
-    return fetch(url).then(r=>r.ok?r.json():Promise.reject()).then(j=>{const rt=j&&j.routes&&j.routes[0];if(!rt||!rt.geometry)return Promise.reject();
+    const ctrl=(function(){try{return new AbortController();}catch(_){return null;}})();
+    const to=setTimeout(function(){try{if(ctrl)ctrl.abort();}catch(_){}},15000);   // abort si le serveur de routing traîne
+    return fetch(url,{signal:ctrl?ctrl.signal:undefined}).then(r=>{clearTimeout(to);return r.ok?r.json():Promise.reject();}).then(j=>{const rt=j&&j.routes&&j.routes[0];if(!rt||!rt.geometry)return Promise.reject();
       return {poly:rt.geometry.coordinates.map(c=>{const m=lngLatToM(c[0],c[1]);return {x:m.x,y:m.y};}),dist:rt.distance};});}
   // (re)calcule le tracé DEPUIS la position courante → il se réajuste comme Google Maps, la portion faite disparaît
-  function doRouteFetch(){if(!route)return;route.ffx=state.pl.x;route.ffy=state.pl.y;const my=++routeReq;
-    fetchRoute(route.x,route.y).then(r=>{if(my===routeReq&&route){route.poly=r.poly;route.dist=r.dist;if(window.__wake)__wake(700);}}).catch(()=>{/* repli : ligne directe */});}
+  let lastRouteFetch=0,_routeBusy=false;
+  function doRouteFetch(){if(!route||_routeBusy)return;   // garde anti-concurrence
+    const now=performance.now();if(now-lastRouteFetch<3000)return;lastRouteFetch=now;_routeBusy=true;   // au plus 1 requête OSRM / 3 s → fini le flood (à ×1000, afterMove par sous-pas appelait doRouteFetch ~100-200×/s = risque de ban IP)
+    route.ffx=state.pl.x;route.ffy=state.pl.y;const my=++routeReq;
+    fetchRoute(route.x,route.y).then(r=>{if(my===routeReq&&route){route.poly=r.poly;route.dist=r.dist;if(window.__wake)__wake(700);}}).catch(()=>{/* repli : ligne directe */}).then(()=>{_routeBusy=false;});}
   function setRoute(x,y,name){route={x:x,y:y,name:name,poly:null,dist:null,_remain:null,ffx:state.pl.x,ffy:state.pl.y};
     rbName.textContent=name;routeBar.classList.add('show');document.body.classList.add('routing');toast('r','◈','Itinéraire tracé',name);doRouteFetch();if(window.__wake)__wake(900);}
   function clearRoute(){routeReq++;route=null;routeBar.classList.remove('show');document.body.classList.remove('routing');if(window.__wake)__wake(700);}
@@ -1389,7 +1394,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=136;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=137;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
