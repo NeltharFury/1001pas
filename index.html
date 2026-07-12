@@ -684,7 +684,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       // parfois différente de celle d'Overpass pour un site identique → sans ça, doublons + comptes qui divergent test↔téléphone.
       const nm=normStr(P.n);let dup=null;const lst=world._poiByName.get(nm);
       if(lst)for(const e of lst){if(Math.hypot(e.x-px,e.y-py)<CONFIG.poi.dedup){dup=e;break;}}
-      if(dup){if(mergePoi(dup,P,src))changed=true;if(tag)dup._fz=tag;continue;}
+      if(dup){if(mergePoi(dup,P,src))changed=true;if(tag)dup._fz=tag;
+        if(state.discP.has(key)&&!state.discP.has(dup.id)){state.discP.delete(key);state.discP.add(dup.id);changed=true;dirty=true;}   // MÊME site découvert sous une autre clé (tuile↔Overpass, ordre d'arrivée différent entre sessions) → on aligne l'id sur discP : plus de re-verrouillage ni de re-crédit d'XP
+        continue;}
       const P2={id:key,x:px,y:py,lng:P.lng,lat:P.lat,g:P.g,n:P.n,type:P.type,src:src,_fz:tag,wiki:P.wiki||'',wd:P.wd||'',desc:P.desc||''};
       world._poiById.set(key,P2);world.pois.push(P2);
       if(!world._poiByName.has(nm))world._poiByName.set(nm,[]);world._poiByName.get(nm).push(P2);
@@ -1381,7 +1383,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=134;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=135;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
