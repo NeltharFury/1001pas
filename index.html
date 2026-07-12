@@ -668,7 +668,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function ingestOSM(d,forZone){if(!d||!world)return;const toMx=lng=>(lng-world.C.lng)*world.lngM,toMy=lat=>(lat-world.C.lat)*LATM;
     for(const p of (d.places||[])){const k=p.t+'|'+p.name+'|'+p.lng.toFixed(4);if(world._placeKeys.has(k))continue;world._placeKeys.add(k);world.places.push({x:toMx(p.lng),y:toMy(p.lat),name:p.name,t:p.t});}
     if(!world.commune)world.commune=computeCommune(world.places);
-    let added=false;
+    let added=false,changed=false;   // changed = une fusion a muté un site (promotion tuile→OSM = coords, ou enrichissement wiki/wd/desc = tier) → recalcul nécessaire
     // Rattachement à la commune SEULEMENT si le site est DANS son contour (pas juste dans la bbox rectangulaire) → fini les sites qui
     // débordent hors de la commune. Test contre le polygone de la commune elle-même (identique sur tout appareil) → reste déterministe.
     const fzZone=forZone?world._zoneById.get(forZone):null, fzRings=(fzZone&&fzZone.rings&&fzZone.rings.length)?fzZone.rings:null;
@@ -679,22 +679,24 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     for(const P of _pois){const key=poiKey(P.lng,P.lat,P.n);const src=P.src||'tile';const px=toMx(P.lng),py=toMy(P.lat);
       const tag=(forZone&&inFz(px,py))?forZone:null;   // rattaché à la commune uniquement si DANS son contour
       const ex=world._poiById.get(key);
-      if(ex){mergePoi(ex,P,src);if(tag)ex._fz=tag;continue;}
+      if(ex){if(mergePoi(ex,P,src))changed=true;if(tag)ex._fz=tag;continue;}
       // Dédup secondaire : MÊME nom à faible distance = MÊME site. Les tuiles quantifient les coordonnées → clé (arrondie ~100 m)
       // parfois différente de celle d'Overpass pour un site identique → sans ça, doublons + comptes qui divergent test↔téléphone.
       const nm=normStr(P.n);let dup=null;const lst=world._poiByName.get(nm);
       if(lst)for(const e of lst){if(Math.hypot(e.x-px,e.y-py)<CONFIG.poi.dedup){dup=e;break;}}
-      if(dup){mergePoi(dup,P,src);if(tag)dup._fz=tag;continue;}
+      if(dup){if(mergePoi(dup,P,src))changed=true;if(tag)dup._fz=tag;continue;}
       const P2={id:key,x:px,y:py,lng:P.lng,lat:P.lat,g:P.g,n:P.n,type:P.type,src:src,_fz:tag,wiki:P.wiki||'',wd:P.wd||'',desc:P.desc||''};
       world._poiById.set(key,P2);world.pois.push(P2);
       if(!world._poiByName.has(nm))world._poiByName.set(nm,[]);world._poiByName.get(nm).push(P2);
       added=true;}
-    reindexPois();refreshNames();if(added){if(window.__wake)__wake(900);retroUnlock();}} // réveil : afficher les sites qui viennent d'arriver (même à l'arrêt)
+    if(added||changed){reindexPois();refreshNames();}   // recalcul (spatial + noms + sélection plafonnée) SEULEMENT si un site a été ajouté/muté → plus de gros travail O(n) à chaque re-fetch d'un secteur déjà connu (perf/batterie)
+    if(added){if(window.__wake)__wake(900);retroUnlock();}} // réveil : afficher les sites qui viennent d'arriver (même à l'arrêt)
   // Fusion d'un site déjà connu : enrichit les tags, et PROMEUT tuile→Overpass (coords EXACTES + source déterministe).
   // On garde l'id (clé) existant → une découverte déjà acquise (state.discP) reste valable.
-  function mergePoi(ex,P,src){
-    if(!ex.wiki&&P.wiki)ex.wiki=P.wiki;if(!ex.wd&&P.wd)ex.wd=P.wd;if(!ex.desc&&P.desc)ex.desc=P.desc;
-    if(src==='osm'&&ex.src!=='osm'){ex.src='osm';ex.x=(P.lng-world.C.lng)*world.lngM;ex.y=(P.lat-world.C.lat)*LATM;ex.lng=P.lng;ex.lat=P.lat;if(P.g)ex.g=P.g;if(P.type)ex.type=P.type;}}
+  function mergePoi(ex,P,src){let ch=false;
+    if(!ex.wiki&&P.wiki){ex.wiki=P.wiki;ch=true;}if(!ex.wd&&P.wd){ex.wd=P.wd;ch=true;}if(!ex.desc&&P.desc){ex.desc=P.desc;ch=true;}
+    if(src==='osm'&&ex.src!=='osm'){ex.src='osm';ex.x=(P.lng-world.C.lng)*world.lngM;ex.y=(P.lat-world.C.lat)*LATM;ex.lng=P.lng;ex.lat=P.lat;if(P.g)ex.g=P.g;if(P.type)ex.type=P.type;ch=true;}
+    return ch;}   // true = a muté (coords promues ou tags enrichis) → l'appelant refera l'index/les noms
   // Débloque après coup les lieux qu'on a déjà croisés mais qui n'étaient pas encore chargés (fini le « je suis passé et rien »)
   function retroUnlock(){const pts=[{x:state.pl.x,y:state.pl.y}],n=trail.length;
     for(let i=Math.max(0,n-90);i<n;i++)pts.push(trail[i]);
@@ -1371,7 +1373,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=122;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=123;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
