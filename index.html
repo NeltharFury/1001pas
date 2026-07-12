@@ -143,7 +143,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     cursor:pointer;font-family:var(--display);font-size:20px;color:#4a3421;padding:0;display:flex;align-items:center;justify-content:center;}
   #zoomStack button:active{background:rgba(164,36,59,.12);}
   #zoomVal{font-family:var(--display);font-size:11px;font-weight:700;color:#7c5a17;text-align:center;line-height:1;padding:1px 0 3px;font-variant-numeric:tabular-nums;}
-  #compass{right:13px;top:12px;pointer-events:none;opacity:.85;}
+  #compass{right:13px;top:12px;pointer-events:none;opacity:.85;transform-origin:50% 55%;}   /* origine = centre de la rose ; tourne (sans transition, pour coller au cap) quand l'option « carte orientée » est active */
   #compass svg{width:70px;height:70px;display:block;}   /* aussi haute que la fenêtre de profil (haut-gauche) */
 
   #simBtn{right:78px;bottom:20px;font-size:21px;cursor:pointer;z-index:6;}   /* test : même taille que les autres boutons, en bas à DROITE (à côté de la pile), par-dessus tout */
@@ -428,6 +428,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="sp-row"><span>Zones explorées</span><i></i><b id="sReg">0</b></div>
     <div class="sp-row"><span>Sites découverts</span><i></i><b id="sPoi">0 / 0</b></div>
     <div class="sp-row"><span>Zones complétées</span><i></i><b id="sWorld">0</b></div>
+    <div class="cs-sec">Préférences</div>
+    <div class="row"><div class="rl"><span>Carte orientée dans mon sens</span><small>La carte pivote selon ta direction (défaut : nord en haut)</small></div><button class="tg2" id="rotBtn">Activer</button></div>
     <div class="cs-ver" id="csVer"></div>
   </div>
 
@@ -1047,7 +1049,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // la sauvegarde de la PROGRESSION est prioritaire : si le stockage est plein, on sacrifie le cache OSM,
   // et si ça échoue encore on PRÉVIENT le joueur (jamais d'échec silencieux → perte de progression)
   function save(){const js=JSON.stringify({
-    C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck,
+    C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck, rotMap:!!state.rotMap,
     discR:[...state.discR],discC:[...state.discC],discPays:[...state.discPays],discCont:[...state.discCont],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
     try{localStorage.setItem(SAVE_KEY,js);}
     catch(e){purgeOsmCache(0);
@@ -1056,7 +1058,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       catch(e2){if(!saveWarned){saveWarned=true;toast('r','⚠','Sauvegarde impossible','Stockage du navigateur plein ou bloqué');}return;}}
     dirty=false;}
   function applySaved(d){
-    state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;state.passAck=!!d.passAck;
+    state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;state.passAck=!!d.passAck;state.rotMap=!!d.rotMap;
     // discR/compR = ids de ZONES réelles ('c'+id). On ignore les anciennes clés Voronoï ('i,j') des sauvegardes d'avant → compteur exact ; reconcileZones() re-révèle depuis les lieux débloqués.
     (d.discR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.discR.add(k);});(d.discC||[]).forEach(k=>{if(k)state.discC.add(k);});(d.discPays||[]).forEach(k=>{if(k)state.discPays.add(k);});(d.discCont||[]).forEach(k=>{if(k)state.discCont.add(k);});(d.discP||[]).forEach(k=>state.discP.add(k));(d.compR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.compR.add(k);});(d.ach||[]).forEach(k=>state.ach.add(k));(d.visited||[]).forEach(k=>state.visited.add(k));
     const li=levelInfo(state.xp);prevLevel=li.level;prevTitle=titleForLevel(li.level);
@@ -1323,7 +1325,44 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
   document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
-  const APP_BUILD=112;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  // ── OPTION « Carte orientée dans mon sens » (réglage dans la fiche perso, dispo en distribuable) : la carte pivote selon le
+  //    cap de marche + la rose des vents suit pour montrer le nord. Défaut OFF = nord toujours en haut (jamais imposé). ──
+  const compassEl=document.getElementById('compass');
+  function updateCompass(){if(compassEl)compassEl.style.transform='rotate('+(-map.getBearing())+'deg)';}   // la rose tourne à l'inverse du cap → son « N » pointe le vrai nord
+  map.on('rotate',updateCompass);
+  // CAP lissé IMAGE PAR IMAGE. Direction brute ré-échantillonnée tous les ≥0,7 m parcourus (filtre le jitter GPS ET donne
+  // une cible fiable), puis le vecteur cap (hvx,hvy) est lissé à CHAQUE frame vers cette direction → cap continu, sans marche.
+  // Alimente la flèche de l'avatar ET la rotation de la carte. Partagé SIM (clic-cible) + VRAI GPS.
+  function trackHeadingFrame(dt){
+    if(state._hsx===undefined){state._hsx=state.pl.x;state._hsy=state.pl.y;}
+    const sdx=state.pl.x-state._hsx, sdy=state.pl.y-state._hsy, sm=Math.hypot(sdx,sdy);
+    if(sm>=0.7){state._hraw=[sdx/sm,sdy/sm];state._hsx=state.pl.x;state._hsy=state.pl.y;}   // nouvelle direction brute (tous les 0,7 m)
+    if(!state._hraw)return;
+    const nx=state._hraw[0], ny=state._hraw[1];
+    if(state.hvx===undefined){state.hvx=nx;state.hvy=ny;return;}
+    const ah=1-Math.exp(-dt/0.20);   // lissage du cap (~0,20 s), INVARIANT au framerate → aiguille + rotation douces
+    let vx=state.hvx+(nx-state.hvx)*ah, vy=state.hvy+(ny-state.hvy)*ah, vm=Math.hypot(vx,vy)||1;
+    state.hvx=vx/vm;state.hvy=vy/vm;
+  }
+  // Relèvement de la carte lissé image par image → rotation FLUIDE, jamais par à-coups. Retourne le nouveau relèvement (deg) ou
+  // null si rien à changer. La caméra est appliquée en UNE seule mutation dans frame() (jumpTo) → aucune saccade ; le calque suit (map.on('render')).
+  function stepMapBearing(dt){
+    if(!state.rotMap||state.hvx===undefined)return null;
+    const target=Math.atan2(state.hvx,state.hvy)*180/Math.PI;   // cap→relèvement : atan2(est,nord)
+    if(state.mapBearing===undefined)state.mapBearing=map.getBearing();
+    let diff=target-state.mapBearing;while(diff>180)diff-=360;while(diff<-180)diff+=360;   // plus court chemin (aucune toupie au passage du sud)
+    if(Math.abs(diff)<0.1){if(state.mapBearing===target)return null;state.mapBearing=target;return target;}
+    const a=1-Math.exp(-dt/0.16);   // easing exponentiel (~0,16 s), INVARIANT au framerate
+    state.mapBearing+=diff*a;if(state.mapBearing>180)state.mapBearing-=360;else if(state.mapBearing<-180)state.mapBearing+=360;
+    wake(160);   // garde le moteur vivant tant que la carte tourne (même joueur à l'arrêt)
+    return state.mapBearing;
+  }
+  const rotBtn=document.getElementById('rotBtn');
+  function syncRotUI(){if(!rotBtn)return;rotBtn.classList.toggle('on',!!state.rotMap);rotBtn.textContent=state.rotMap?'Actif':'Activer';}
+  if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
+    if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
+    if(window.__wake)__wake(700);};
+  const APP_BUILD=116;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1473,7 +1512,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function setLocation(lng,lat){const C=[lng,lat];
     initWorld(C);
     state.pl.x=0;state.pl.y=0;state.xp=0;state.dist=0;state.stepXpGiven=0;state.discR.clear();state.discC.clear();state.discPays.clear();state.discCont.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();discToastNames.clear();
-    trail.length=0;prevLevel=1;prevTitle=TITLES[0].name;control.target=null;lastFetch=null;state.hvx=state.hvy=undefined;state._hsamp=null;
+    trail.length=0;prevLevel=1;prevTitle=TITLES[0].name;control.target=null;lastFetch=null;state.hvx=state.hvy=undefined;state._hsamp=null;state._hsx=state._hsy=undefined;state._hraw=null;state.mapBearing=undefined;
     clearRoute();tip=null;curPOI=null;poiPanel.classList.remove('open'); // rien ne doit pointer vers l'ancien monde
     follow=true;recenterBtn.classList.remove('show');
     map.setCenter(C);map.setZoom(CONFIG.defaultZoom);hint.classList.remove('gone');
@@ -1614,16 +1653,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       if(dm<CONFIG.route.arrive){toast('r','◈','Destination atteinte',route.name);clearRoute();}
       else if(route.ffx!=null&&Math.hypot(state.pl.x-route.ffx,state.pl.y-route.ffy)>30)doRouteFetch();} // réajuste depuis la position
     if(state.dist>40)hint.classList.add('gone'); // le bandeau d'accueil disparaît après les premiers vrais pas
-    // CAP (direction de déplacement) — alimente la flèche de l'avatar ; partagé SIM (clic-cible) + VRAI GPS.
-    // On échantillonne tous les ≥1,5 m et on lisse le vecteur cap (monde, +y = nord) → aiguille stable, pas nerveuse.
-    { const hs=state._hsamp;
-      if(hs){ const hx=state.pl.x-hs.x, hy=state.pl.y-hs.y, hm=Math.hypot(hx,hy);
-        if(hm>=1.5){ const nx=hx/hm, ny=hy/hm;
-          if(state.hvx===undefined){state.hvx=nx;state.hvy=ny;}
-          else{ let vx=state.hvx+(nx-state.hvx)*0.3, vy=state.hvy+(ny-state.hvy)*0.3, vm=Math.hypot(vx,vy)||1; state.hvx=vx/vm; state.hvy=vy/vm; }
-          state._hsamp={x:state.pl.x,y:state.pl.y}; } }
-      else state._hsamp={x:state.pl.x,y:state.pl.y}; }
-    maybeFetchArea();
+    maybeFetchArea();   // (le CAP est maintenant suivi image-par-image dans frame() → rotation fluide)
   }
   function update(dt){
     ensureZone(); // va chercher la vraie forme de la contrée où l'on est (si pas déjà chargée)
@@ -1921,7 +1951,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   // Tracé d'une ZONE (polygone administratif réel) + test à l'écran + disque de révélation (repli « au pas »)
   function zonePath(Z){for(const r of Z.rings){if(r.length<3)continue;const p0=proj(r[0][0],r[0][1]);fctx.moveTo(p0.x,p0.y);for(let i=1;i<r.length;i++){const p=proj(r[i][0],r[i][1]);fctx.lineTo(p.x,p.y);}fctx.closePath();}}
-  function zoneOnScreen(Z){const a=proj(Z.bb[0],Z.bb[1]),b=proj(Z.bb[2],Z.bb[3]);return !(Math.max(a.x,b.x)<-40||Math.min(a.x,b.x)>W+40||Math.max(a.y,b.y)<-40||Math.min(a.y,b.y)>H+40);}
+  // Boîte-écran sur les 4 COINS du cadre (pas 2) → correcte même carte TOURNÉE : sinon une zone en bordure sort/rentre du rendu au fil de la rotation = la brume « repop » (flicker).
+  function zoneOnScreen(Z){const p0=proj(Z.bb[0],Z.bb[1]),p1=proj(Z.bb[2],Z.bb[1]),p2=proj(Z.bb[2],Z.bb[3]),p3=proj(Z.bb[0],Z.bb[3]);
+    const minx=Math.min(p0.x,p1.x,p2.x,p3.x),maxx=Math.max(p0.x,p1.x,p2.x,p3.x),miny=Math.min(p0.y,p1.y,p2.y,p3.y),maxy=Math.max(p0.y,p1.y,p2.y,p3.y);
+    return !(maxx<-40||minx>W+40||maxy<-40||miny>H+40);}
   function addDisc(x,y,r){const p=proj(x,y);if(p.x<-r||p.x>W+r||p.y<-r||p.y>H+r)return;fctx.moveTo(p.x+r,p.y);fctx.arc(p.x,p.y,r,0,TAU);}
   function drawOverlay(t){
     if(!ready||!world)return;
@@ -2028,9 +2061,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
           const img=sealImg(shp,P.g,false);
           if(img){fctx.save();fctx.globalAlpha=av;fctx.drawImage(img,pp.x-SEAL_PX/2,pp.y-SEAL_PX/2,SEAL_PX,SEAL_PX);fctx.restore();}
           else drawLocked(pp.x,pp.y,GLYPH_P[P.g]||GLYPH_P.curio,av,siteTier(P)); }
-        if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?24:19,disc:disc,prox:prox,av:av,g:P.g});}}
+        if(disc||prox>0.03)nameCands.push({nm:P.n,x:pp.x,y:pp.y,oy:disc?24:19,disc:disc,prox:prox,av:av,g:P.g,id:P.id});}}
     // 3) placement glouton : débloqués d'abord, puis sites marquants, puis de haut en bas ; on saute tout nom qui en chevauche un déjà posé (le sceau reste)
-    nameCands.sort((a,b)=>(b.disc-a.disc)||((NAME_PRIO[b.g]||0)-(NAME_PRIO[a.g]||0))||(a.y-b.y));
+    nameCands.sort((a,b)=>(b.disc-a.disc)||((NAME_PRIO[b.g]||0)-(NAME_PRIO[a.g]||0))||(a.id<b.id?-1:a.id>b.id?1:0));   // départage STABLE (id) et non par position écran → l'ordre glouton ne bascule plus quand la carte tourne/se déplace = plus de flicker
     if(nameCands.length>350)nameCands.length=350;   // borne dure défensive : en ville très dense (plus de plafond de sites), évite un pic O(n²) de placement d'étiquettes par frame
     fctx.font='600 10.5px '+FONT_SERIF;
     for(const c of nameCands){const nw=fctx.measureText(c.nm).width,bx={x:c.x-nw/2-6,y:c.y+c.oy,w:nw+12,h:15};
@@ -2127,9 +2160,16 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     try{
       window.__ff=(window.__ff||0)+1;
       const dt=Math.min(0.05,(t-last)/1000);last=t;
-      if(ready&&world){const moved=update(dt);if(moved){wake(600);if(follow)map.setCenter(playerLngLat());}
+      if(ready&&world){const moved=update(dt);if(moved)wake(600);
+        trackHeadingFrame(dt);                 // CAP lissé par frame (flèche + rotation)
+        const nb=stepMapBearing(dt);           // relèvement lissé (deg) ou null si rien à changer
+        // CAMÉRA : UNE SEULE mutation par frame → recentrage + rotation atomiques, sans saccade
+        if(moved&&follow&&nb!==null)map.jumpTo({center:playerLngLat(),bearing:nb});
+        else if(nb!==null)map.setBearing(nb);
+        else if(moved&&follow)map.setCenter(playerLngLat());
         const active=t<renderUntil||progPanel.classList.contains('open')||(control.joy&&control.joy.active); // qqch à animer ?
-        if(active&&t-lastRender>=33){updateHUD();map.triggerRepaint();lastRender=t;lastHud=t;} // GPU actif seulement quand utile, PLAFONNÉ à ~30 fps (moitié moins de charge qu'à 60)
+        const gap=(nb!==null)?15:33;   // EN ROTATION → ~60 fps (fluidité parfaite) ; sinon ~30 fps (batterie)
+        if(active&&t-lastRender>=gap){updateHUD();map.triggerRepaint();lastRender=t;lastHud=t;}
         else if(!active&&t-lastHud>500){updateHUD();lastHud=t;}      // à l'arrêt : petit battement HUD (compteur de pas) sans réveiller le GPU
       }
     }catch(e){logErr('frame',e);}
@@ -2281,6 +2321,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const C=(saved&&saved.C)?saved.C:CONFIG.defaultCenter;
     initWorld(C);
     if(saved)applySaved(saved);
+    syncRotUI();   // reflète l'option « carte orientée » chargée sur le bouton (bearing s'appliquera au 1er déplacement)
     map.setCenter(playerLngLat());map.setZoom(CONFIG.defaultZoom);
     ready=true;wake(2500);               // premier rendu + révélation initiale
     revealStart();                       // dévoile la contrée de départ (fix « je vois plus rien »)
