@@ -522,7 +522,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     route:{arrive:20},                                 // m : distance d'arrivée d'un itinéraire
     reveal:{here:70},                                  // m : petit halo de vision immédiate, SEULEMENT tant que la contrée n'est pas encore révélée (révélation = par ZONE)
     zoneSmooth:0,                                       // m : 0 = AUCUN lissage → points OSM bruts, précision maximale (reflète la réalité, pontons compris). >0 = lissage Douglas-Peucker.
-    gps:{minStep:2, maxJump:150, relocate:4000},       // vrai GPS : anti-bruit (m mini comptés), anti-saut (m maxi/relevé), distance de refondation du monde
+    gps:{minStep:2, maxJump:150, relocate:4000, accMax:100},  // vrai GPS : anti-bruit (m mini comptés), anti-saut (m maxi/relevé), distance de refondation, précision MAXI acceptée (au-delà = fix réseau grossier ignoré)
   };
   // DEV = version TEST (mode simulation visible) ; sinon version DISTRIBUABLE (vrai GPS, sim caché).
   // Test si ?dev / ?sim dans l'URL, ou ouverture locale (file://, localhost). ?prod force la version distribuable.
@@ -1371,7 +1371,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=120;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=121;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2188,20 +2188,31 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   }
 
   // ---- VRAI GPS (version distribuable) : la position réelle du téléphone pilote l'avatar ----
-  let geoWatch=null, geoFirst=true, bootHadSave=false, geoWatchdog=null, lastAcc=null;
+  let geoWatch=null, geoFirst=true, bootHadSave=false, geoWatchdog=null, lastAcc=null, geoCoarse=0, geoQuar=null;
   function setHint(txt){}   // plus de bandeau texte sur la carte (les messages importants passent en notif système)
   function gpsChip(txt,show){var c=document.getElementById('gpsChip');if(!c)return;if(txt!=null)c.textContent=txt;c.classList.toggle('show',!!show);}
   function gpsLabel(acc){var a=Math.round(acc);return a>40?('GPS ±'+a+' m · trop imprécis — sors dehors + localisation « précise »'):('GPS actif · ±'+a+' m');}
   function applyGpsFix(lng,lat,acc){
     if(!world||!ready)return;
     lastAcc=acc;
-    if(geoFirst){geoFirst=false;state.gpsFounded=true;clearTimeout(geoWatchdog); // 1er relevé GPS → monde FONDÉ par une vraie position (drapeau anti-purge « contrée fantôme »)
+    if(geoFirst){
+      // 1er relevé : NE PAS fonder le monde sur un fix RÉSEAU grossier (Android en livre souvent un à 0,5-2 km avant le vrai GPS) →
+      // sinon monde fondé / commune révélée au MAUVAIS endroit. On attend un fix précis ; repli : après ~8 fix grossiers on accepte le meilleur.
+      if(isFinite(acc)&&acc>CONFIG.gps.accMax&&geoCoarse<8){geoCoarse++;gpsChip('Recherche d\'une position précise… (±'+Math.round(acc)+' m)',true);return;}
+      geoFirst=false;state.gpsFounded=true;clearTimeout(geoWatchdog); // 1er relevé retenu → monde FONDÉ par une vraie position (drapeau anti-purge « contrée fantôme »)
       if(!bootHadSave){ setLocation(lng,lat); } // NOUVEAU joueur → on FONDE le monde À sa position réelle (carte propre, aucune contrée fantôme du centre par défaut)
       else{ const m=lngLatToM(lng,lat); state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show'); // joueur EXISTANT → on garde la progression, on se place juste dessus
             map.setCenter([lng,lat]);map.setZoom(Math.max(map.getZoom(),CONFIG.defaultZoom));revealStart();maybeFetchArea(); }
       dirty=true;afterMove();save();if(window.__wake)__wake(2600);toast('r','◈','Position acquise','Le GPS te suit maintenant');gpsChip(gpsLabel(acc),true);return;
     }
+    // Relevés SUIVANTS : ignorer un fix trop IMPRÉCIS (ne pas téléporter l'avatar ni découvrir une commune où l'on n'est pas — pilier vie privée/honnêteté).
+    if(isFinite(acc)&&acc>CONFIG.gps.accMax){gpsChip(gpsLabel(acc),true);return;}
     const m=lngLatToM(lng,lat), step=Math.hypot(m.x-state.pl.x,m.y-state.pl.y);
+    // Saut aberrant (> maxJump) : QUARANTAINE — on n'applique QUE si le relevé suivant (précis) le confirme à < maxJump (= vraie relocalisation, pas un glitch d'un seul fix).
+    if(step>CONFIG.gps.maxJump){
+      if(geoQuar&&Math.hypot(m.x-geoQuar.x,m.y-geoQuar.y)<=CONFIG.gps.maxJump){geoQuar=null;}  // confirmé → on applique ci-dessous
+      else{geoQuar={x:m.x,y:m.y};gpsChip(gpsLabel(acc),true);return;}                            // 1er saut → quarantaine, on ne bouge pas
+    } else geoQuar=null;
     state.pl.x=m.x;state.pl.y=m.y;
     if(!NATIVE && step>=CONFIG.gps.minStep && step<=CONFIG.gps.maxJump) state.dist+=step; // web : distance estimée du GPS. En natif : les pas viennent du podomètre (le GPS ne sert qu'à la position)
     dirty=true;afterMove();
