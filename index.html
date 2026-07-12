@@ -1053,7 +1053,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // la sauvegarde de la PROGRESSION est prioritaire : si le stockage est plein, on sacrifie le cache OSM,
   // et si ça échoue encore on PRÉVIENT le joueur (jamais d'échec silencieux → perte de progression)
   function save(){const js=JSON.stringify({
-    C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck, rotMap:!!state.rotMap,
+    C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck, rotMap:!!state.rotMap, gf:!!state.gpsFounded,
     discR:[...state.discR],discC:[...state.discC],discPays:[...state.discPays],discCont:[...state.discCont],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
     try{localStorage.setItem(SAVE_KEY,js);}
     catch(e){purgeOsmCache(0);
@@ -1062,7 +1062,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       catch(e2){if(!saveWarned){saveWarned=true;toast('r','⚠','Sauvegarde impossible','Stockage du navigateur plein ou bloqué');}return;}}
     dirty=false;}
   function applySaved(d){
-    state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;state.passAck=!!d.passAck;state.rotMap=!!d.rotMap;
+    state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;state.passAck=!!d.passAck;state.rotMap=!!d.rotMap;state.gpsFounded=!!d.gf;
     // discR/compR = ids de ZONES réelles ('c'+id). On ignore les anciennes clés Voronoï ('i,j') des sauvegardes d'avant → compteur exact ; reconcileZones() re-révèle depuis les lieux débloqués.
     (d.discR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.discR.add(k);});(d.discC||[]).forEach(k=>{if(k)state.discC.add(k);});(d.discPays||[]).forEach(k=>{if(k)state.discPays.add(k);});(d.discCont||[]).forEach(k=>{if(k)state.discCont.add(k);});(d.discP||[]).forEach(k=>state.discP.add(k));(d.compR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.compR.add(k);});(d.ach||[]).forEach(k=>state.ach.add(k));(d.visited||[]).forEach(k=>state.visited.add(k));
     const li=levelInfo(state.xp);prevLevel=li.level;prevTitle=titleForLevel(li.level);
@@ -1366,7 +1366,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=118;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=119;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2190,7 +2190,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function applyGpsFix(lng,lat,acc){
     if(!world||!ready)return;
     lastAcc=acc;
-    if(geoFirst){geoFirst=false;clearTimeout(geoWatchdog); // 1er relevé GPS
+    if(geoFirst){geoFirst=false;state.gpsFounded=true;clearTimeout(geoWatchdog); // 1er relevé GPS → monde FONDÉ par une vraie position (drapeau anti-purge « contrée fantôme »)
       if(!bootHadSave){ setLocation(lng,lat); } // NOUVEAU joueur → on FONDE le monde À sa position réelle (carte propre, aucune contrée fantôme du centre par défaut)
       else{ const m=lngLatToM(lng,lat); state.pl.x=m.x;state.pl.y=m.y;trail.length=0;follow=true;recenterBtn.classList.remove('show'); // joueur EXISTANT → on garde la progression, on se place juste dessus
             map.setCenter([lng,lat]);map.setZoom(Math.max(map.getZoom(),CONFIG.defaultZoom));revealStart();maybeFetchArea(); }
@@ -2319,9 +2319,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   map.on('load',()=>{
     map.on('styleimagemissing',ev=>{try{if(!map.hasImage(ev.id))map.addImage(ev.id,{width:1,height:1,data:new Uint8Array(4)});}catch(_){}});
     let saved=null;try{saved=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');}catch(e){}
-    // Anti-« contrée fantôme » : un save DISTRIBUABLE resté centré sur le centre PAR DÉFAUT (Annecy) n'a JAMAIS été refondé
-    // par un vrai relevé GPS → tout ce qu'il contient a été révélé au centre par défaut sans y être. On repart propre.
-    if(!DEV&&saved&&saved.C&&Math.abs(saved.C[0]-CONFIG.defaultCenter[0])<0.002&&Math.abs(saved.C[1]-CONFIG.defaultCenter[1])<0.002){
+    // Anti-« contrée fantôme » : un save DISTRIBUABLE resté centré sur le centre PAR DÉFAUT (Annecy) SANS avoir jamais été fondé
+    // par un vrai relevé GPS (drapeau `gf`) → tout ce qu'il contient a été révélé au centre par défaut sans y être. On repart propre.
+    // ⚠️ Le drapeau `gf` évite d'effacer en boucle la sauvegarde d'un joueur qui HABITE près du centre par défaut (vieille ville d'Annecy).
+    if(!DEV&&saved&&!saved.gf&&saved.C&&Math.abs(saved.C[0]-CONFIG.defaultCenter[0])<0.002&&Math.abs(saved.C[1]-CONFIG.defaultCenter[1])<0.002){
       saved=null;try{localStorage.removeItem(SAVE_KEY);}catch(_){}}
     bootHadSave=!!saved;                  // nouveau joueur vs joueur existant → le 1er relevé GPS refonde ou conserve
     const C=(saved&&saved.C)?saved.C:CONFIG.defaultCenter;
