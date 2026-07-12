@@ -839,7 +839,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     let bb=[1e18,1e18,-1e18,-1e18];for(const r of rings){const b=ringBB(r);bb=[Math.min(bb[0],b[0]),Math.min(bb[1],b[1]),Math.max(bb[2],b[2]),Math.max(bb[3],b[3])];}
     return {id:f.id,name:f.name||'',kind:f.kind||'forbidden',rings:rings,bb:bb,cx:(bb[0]+bb[2])/2,cy:(bb[1]+bb[3])/2};}
   function ingestForbidden(f){if(!world||!f||world._forbIds.has(f.id))return;const zz=buildForbidden(f);if(!zz)return;world._forbIds.add(f.id);world.forbidden.push(zz);}
-  function loadForbiddenCache(){if(!world)return;const m=forbCacheRead();for(const id in m)ingestForbidden({id:id,name:m[id].name,kind:m[id].kind,poly:m[id].poly});}
+  function loadForbiddenCache(){if(!world)return;const m=forbCacheRead();for(const id in m)ingestForbidden({id:id,name:m[id].name,kind:m[id].kind,poly:m[id].poly});
+    if(world.pois&&world.pois.length)reindexPois();checkForbiddenEntry();}   // boot depuis le cache : exclut les sites des zones interdites déjà connues + détecte si on est DÉJÀ dedans (sinon rien jusqu'au prochain fetch)
   // La position (x,y en mètres MONDE) est-elle DANS une zone interdite ? → renvoie la zone (ou null). Utilisé pour couper l'XP des pas + notifier à l'entrée.
   function inForbidden(x,y){if(!world||!world.forbidden.length)return null;
     let pass=null;   // ROUGE (interdit) PRIORITAIRE sur ORANGE (passage) là où ils se chevauchent (ex. militaire dans une réserve) → l'interdit l'emporte TOUJOURS, quel que soit l'ordre d'ingestion
@@ -883,7 +884,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         if(js.remark&&/timed?\s*out|timeout|runtime error/i.test(js.remark))return Promise.reject('partial');
         const out=[];for(const e of js.elements){const nm=(e.tags&&e.tags.name)||'';
           const kind=forbKind(e.tags);   // rouge (interdit) vs orange (passage) selon les tags
-          if(e.type==='way'&&e.geometry&&e.geometry.length>=3)out.push({id:'f'+e.id,name:nm,kind:kind,poly:[e.geometry.map(g=>[g.lon,g.lat])]});
+          if(e.type==='way'&&e.geometry&&e.geometry.length>=4){const g=e.geometry,a=g[0],b=g[g.length-1];if(a.lon===b.lon&&a.lat===b.lat)out.push({id:'f'+e.id,name:nm,kind:kind,poly:[g.map(p=>[p.lon,p.lat])]});}   // way accepté SEULEMENT s'il est fermé (1er = dernier point) → plus de zone fantôme par corde implicite d'une ligne (chemin/clôture)
           else if(e.type==='relation'&&e.members){const rings=stitchForbiddenRings(e.members);if(rings.length)out.push({id:'r'+e.id,name:nm,kind:kind,poly:rings});}}   // grandes zones = relations multipolygones
         finish(out);})
       .catch(()=>{if(done)return;fails++;if(fails>=eps.length)finish(null);});});
@@ -1397,7 +1398,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=139;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=140;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
