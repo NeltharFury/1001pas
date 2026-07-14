@@ -831,8 +831,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // landuse=military + military=danger_area/range/training_area. Données STATIQUES → cache DUR (localStorage), 1 requête par secteur.
   // Rendu = hachures rouge-brun PAR-DESSUS la brume (avertissement toujours visible). Étape suivante : notif à l'entrée + XP/loot désactivés dedans.
   const FORB_KEY='pas1001_forbidden_v1',FORB_MAX=200,FORB_MAX_AREA=40e6;   // 40 km² : au-delà (parc régional…) ce n'est plus une "zone" jouable → ignoré (sinon la moitié du canton en hachures)
+  const FORB_MIN_AREA=2500;   // aire MINIMALE (m²) pour les zones issues du seul tag `access` (no/private/permissive…) : filtre les arrière-cours/piscines/petits enclos (mesuré sur Genève : 24 zones < 2500 m² sur 29 = bruit) ; militaire/prison = pas de minimum
   function forbCacheRead(){try{return JSON.parse(localStorage.getItem(FORB_KEY)||'{}')||{};}catch(e){return {};}}
-  function forbCacheAddMany(list){if(!list||!list.length)return;try{const m=forbCacheRead(),t=Date.now();for(const f of list)m[f.id]={name:f.name||'',kind:f.kind||'forbidden',poly:f.poly,ts:t};   // UNE seule écriture localStorage par récolte (pas une par zone → économe)
+  function forbCacheAddMany(list){if(!list||!list.length)return;try{const m=forbCacheRead(),t=Date.now();for(const f of list)m[f.id]={name:f.name||'',kind:f.kind||'forbidden',poly:f.poly,ts:t,mnA:f.mnA||0};   // UNE seule écriture localStorage par récolte (pas une par zone → économe) ; mnA transporté → le filtre d'aire minimale s'applique AUSSI au rejeu du cache au boot
     const ids=Object.keys(m);if(ids.length>FORB_MAX){ids.sort((a,b)=>(m[a].ts||0)-(m[b].ts||0));for(let i=0;i<ids.length-FORB_MAX;i++)delete m[ids[i]];}
     localStorage.setItem(FORB_KEY,JSON.stringify(m));}catch(e){}}
   function buildForbidden(f){if(!f||!f.poly||!f.poly.length)return null;
@@ -843,13 +844,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       for(let j=0;j<rings.length&&!hole;j++){if(j!==i&&ras[j]>ras[i]&&pointInRing(rings[i][0][0],rings[i][0][1],rings[j]))hole=true;}
       area+=hole?-ras[i]:ras[i];}
     if(area<=0)area=Math.max.apply(null,ras);   // données étranges (trous mal classés) → repli : le plus grand lacet fait foi
+    if(f.mnA&&area<f.mnA)return null;   // trop PETIT pour une zone issue du seul tag access (arrière-cour, piscine, enclos) → ignoré (anti-bruit ; le militaire/prison n'a pas de minimum)
     if(area>FORB_MAX_AREA)return null;   // trop grand (parc régional de centaines de km²) → ce n'est pas une "zone" jouable, on l'ignore
     let bb=[1e18,1e18,-1e18,-1e18];for(const r of rings){const b=ringBB(r);bb=[Math.min(bb[0],b[0]),Math.min(bb[1],b[1]),Math.max(bb[2],b[2]),Math.max(bb[3],b[3])];}
     return {id:f.id,name:f.name||'',kind:f.kind||'forbidden',rings:rings,bb:bb,cx:(bb[0]+bb[2])/2,cy:(bb[1]+bb[3])/2};}
   function ingestForbidden(f){if(!world||!f||world._forbIds.has(f.id))return;const zz=buildForbidden(f);if(!zz)return;world._forbIds.add(f.id);world.forbidden.push(zz);}
   const FORB_TTL=30*86400000;   // 30 j : les zones d'accès bougent peu, mais une base déclassée / un access= retiré sur OSM doit finir par disparaître de la carte
   function loadForbiddenCache(){if(!world)return;const m=forbCacheRead();
-    let stale=false;const now=Date.now();for(const id in m){if(!m[id].ts||now-m[id].ts>FORB_TTL){delete m[id];stale=true;continue;}ingestForbidden({id:id,name:m[id].name,kind:m[id].kind,poly:m[id].poly});}   // TTL : entrée périmée (ou sans date) ignorée ET purgée → re-fetch au prochain passage dans le secteur (_forbTried est par session)
+    let stale=false;const now=Date.now();for(const id in m){if(!m[id].ts||now-m[id].ts>FORB_TTL){delete m[id];stale=true;continue;}ingestForbidden({id:id,name:m[id].name,kind:m[id].kind,mnA:m[id].mnA||0,poly:m[id].poly});}   // TTL : entrée périmée (ou sans date) ignorée ET purgée → re-fetch au prochain passage dans le secteur (_forbTried est par session). mnA relu (0 pour les entrées d'avant = pas de minimum, comportement conservé)
     if(stale){try{localStorage.setItem(FORB_KEY,JSON.stringify(m));}catch(e){}}
     if(world.pois&&world.pois.length)reindexPois();checkForbiddenEntry();}   // boot depuis le cache : exclut les sites des zones interdites déjà connues + détecte si on est DÉJÀ dedans (sinon rien jusqu'au prochain fetch)
   // La position (x,y en mètres MONDE) est-elle DANS une zone interdite ? → renvoie la zone (ou null). Utilisé pour couper l'XP des pas + notifier à l'entrée.
@@ -884,6 +886,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       +'way["military"]["military"!~"^(bunker|trench)$"]('+bb+');relation["military"]["military"!~"^(bunker|trench)$"]('+bb+');'   // relations ALIGNÉES sur les ways (excluent bunkers/tranchées) → plus de fausse zone rouge par une relation
       +'way["amenity"="prison"]('+bb+');relation["amenity"="prison"]('+bb+');'
       +'way["access"="no"][!highway][!barrier][!building][!amenity][!leisure][!sport]('+bb+');relation["access"="no"][!highway][!barrier][!building][!amenity][!leisure][!sport]('+bb+');'
+      +'way["access"="private"][!highway][!barrier][!building][!amenity][!leisure][!sport]('+bb+');relation["access"="private"][!highway][!barrier][!building][!amenity][!leisure][!sport]('+bb+');'   // PRIVÉ enfin inclus, CURÉ : mêmes exclusions que access=no + aire minimale FORB_MIN_AREA côté client → domaines/usines/propriétés closes, PAS les piscines/jardins (mesuré : Genève 5 zones retenues, Annecy 0, Neuchâtel 1)
       +'way["access"~"^(permissive|destination)$"][!highway][!barrier][!building][!amenity][!leisure]('+bb+');relation["access"~"^(permissive|destination)$"][!highway][!barrier][!building][!amenity][!leisure]('+bb+');'
       +');out geom 500;';   // ORANGE = uniquement les vrais tags d'accès « passage » (permissive/destination). PAS leisure=nature_reserve : une réserve/parc régional n'a PAS de restriction d'accès (les gens y vivent/circulent) — ce serait absurde.
     const eps=['https://overpass.osm.ch/api/interpreter','https://overpass-api.de/api/interpreter','https://overpass.openstreetmap.fr/api/interpreter'];
@@ -896,8 +899,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         const trunc=js.elements.length>=500;   // plafond « out geom 500 » atteint → réponse TRONQUÉE (secteur dense) : l'appelant re-couvre en quadrants (sinon des zones au-delà des 500 ne seraient JAMAIS chargées)
         const out=[];for(const e of js.elements){const nm=(e.tags&&e.tags.name)||'';
           const kind=forbKind(e.tags);   // rouge (interdit) vs orange (passage) selon les tags
-          if(e.type==='way'&&e.geometry&&e.geometry.length>=4){const g=e.geometry,a=g[0],b=g[g.length-1];if(a.lon===b.lon&&a.lat===b.lat)out.push({id:'f'+e.id,name:nm,kind:kind,poly:[g.map(p=>[p.lon,p.lat])]});}   // way accepté SEULEMENT s'il est fermé (1er = dernier point) → plus de zone fantôme par corde implicite d'une ligne (chemin/clôture)
-          else if(e.type==='relation'&&e.members){const rings=stitchForbiddenRings(e.members);if(rings.length)out.push({id:'r'+e.id,name:nm,kind:kind,poly:rings});}}   // grandes zones = relations multipolygones
+          const mnA=(e.tags&&(e.tags.landuse==='military'||e.tags.military||e.tags.amenity==='prison'))?0:FORB_MIN_AREA;   // zone issue du SEUL tag access (no/private/permissive…) → aire minimale (anti-bruit) ; militaire/prison = toujours gardés
+          if(e.type==='way'&&e.geometry&&e.geometry.length>=4){const g=e.geometry,a=g[0],b=g[g.length-1];if(a.lon===b.lon&&a.lat===b.lat)out.push({id:'f'+e.id,name:nm,kind:kind,mnA:mnA,poly:[g.map(p=>[p.lon,p.lat])]});}   // way accepté SEULEMENT s'il est fermé (1er = dernier point) → plus de zone fantôme par corde implicite d'une ligne (chemin/clôture)
+          else if(e.type==='relation'&&e.members){const rings=stitchForbiddenRings(e.members);if(rings.length)out.push({id:'r'+e.id,name:nm,kind:kind,mnA:mnA,poly:rings});}}   // grandes zones = relations multipolygones
         finish(out,trunc);})
       .catch(()=>{if(done)return;fails++;if(fails>=eps.length)finish(null);});});
   }
@@ -1427,7 +1431,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=152;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=153;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
