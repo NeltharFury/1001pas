@@ -264,6 +264,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #markerWheel.open .mw-disc{transform:translate(-50%,-50%) scale(1);opacity:1;}
   #markerWheel .mw-disc img{display:block;width:210px;height:210px;pointer-events:none;-webkit-user-drag:none;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;}   /* l'IMG ne capte rien : c'est le disque (div) qui reçoit les événements → aucun comportement natif d'image */
   #markerWheel .mw-disc:active{transform:translate(-50%,-50%) scale(.97);}
+  /* feedback de SÉLECTION : anneau d'or qui pulse sur le quartier choisi (ou le centre), pendant le retrait de la roue.
+     pointer-events:none + aucun délai ajouté à closeWheel → ne peut PAS recréer un gel (leçons builds 70-74). */
+  #markerWheel .mw-pulse{position:absolute;z-index:3;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;pointer-events:none;
+    border:2.5px solid rgba(240,205,120,.95);box-shadow:0 0 18px 4px rgba(214,168,66,.55),inset 0 0 12px rgba(240,205,120,.35);
+    animation:mwPulse .28s ease-out both;}
+  @keyframes mwPulse{0%{transform:scale(.55);opacity:0;}35%{opacity:1;}100%{transform:scale(1.14);opacity:0;}}
   #markerPop{z-index:14;padding:11px 13px;display:none;flex-direction:column;gap:8px;min-width:150px;max-width:210px;}
   #markerPop.show{display:flex;animation:riseIn .2s ease both;}
   #markerPop .mp-t{font-family:var(--display);font-size:13px;color:var(--ink);}
@@ -1304,9 +1310,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       const dx=e.clientX-cx,dy=e.clientY-cy,distU=Math.hypot(dx,dy)*(WHEEL_VB/r.width);
       if(!(distU>=0)){closeWheel();return;}                                            // NaN/Infinity → ferme (jamais de calcul d'index douteux)
       if(distU>WHEEL_ROUT+10){closeWheel();return;}                                    // hors du cachet → ferme
-      if(distU<WHEEL_RIN){if(wheelLL&&world){const m=lngLatToM(wheelLL.lng,wheelLL.lat);setRoute(m.x,m.y,'Point choisi');}closeWheel();return;} // centre = itinéraire
+      // feedback de sélection : anneau d'or pulsé à l'endroit choisi, ajouté AU DISQUE (il rétrécit avec lui pendant le retrait)
+      const pulse=function(ux,uy){try{const fb=document.createElement('div');fb.className='mw-pulse';const k=r.width/WHEEL_VB;
+        fb.style.left=(r.width/2+ux*k)+'px';fb.style.top=(r.height/2+uy*k)+'px';disc.appendChild(fb);}catch(_){}};
+      if(distU<WHEEL_RIN){if(wheelLL&&world){const m=lngLatToM(wheelLL.lng,wheelLL.lat);setRoute(m.x,m.y,'Point choisi');pulse(0,0);}closeWheel();return;} // centre = itinéraire
       let idx=Math.round((Math.atan2(dy,dx)+Math.PI/2)/step);idx=((idx%n)+n)%n;        // quartier le plus proche
-      if(wheelLL)placeMarker(MARKER_TYPES[idx].k,wheelLL.lng,wheelLL.lat);closeWheel();
+      if(wheelLL){const ang=idx*step-Math.PI/2,RG=(WHEEL_RIN+6+WHEEL_ROUT)/2;          // RG = rayon des glyphes (même formule Rg que _wheelSVG : (Ri+G+Ro)/2)
+        pulse(Math.cos(ang)*RG,Math.sin(ang)*RG);
+        placeMarker(MARKER_TYPES[idx].k,wheelLL.lng,wheelLL.lat);}closeWheel();
     }catch(err){logErr('roue-clic',err);closeWheel();}});
     void disc.offsetWidth;                              // flush l'état initial (scale .2 / opacity 0) → la transition « pop » élastique se déclenche vraiment
     w.classList.add('open');suppressClick=true;
@@ -1431,7 +1442,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=153;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=154;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
