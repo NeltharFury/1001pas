@@ -236,7 +236,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #fzOk:active{transform:translateY(1px);}
   #loadChip{top:122px;left:50%;transform:translateX(-50%);padding:5px 13px 5px 10px;font-size:11.5px;font-style:italic;color:var(--inkSoft);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;display:inline-flex;align-items:center;gap:7px;}
   #loadChip.show{opacity:1;}
-  .ldspin{flex:none;transform-origin:center;animation:ldspin .9s linear infinite;}
+  .ldspin{flex:none;transform-origin:center;}
+  #loadChip.show .ldspin{animation:ldspin .9s linear infinite;}   /* le spinner ne tourne QUE quand le chip est visible (avant : animation infinie sur un élément à opacity:0 → le compositeur ne dormait jamais) */
   @keyframes ldspin{to{transform:rotate(360deg);}}
   /* état GPS (acquisition, précision, « autorise la localisation »…) — invisible tant que l'élément n'existait pas → parcours premier lancement muet. Placé BAS-centre pour ne jamais chevaucher #loadChip (haut-centre). */
   #gpsChip{bottom:20px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 34px);padding:7px 15px;font-size:11.5px;font-style:italic;line-height:1.35;text-align:center;color:var(--ink);opacity:0;transition:opacity .25s;pointer-events:none;}
@@ -590,7 +591,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;for(const p of poly){mnx=Math.min(mnx,p[0]);mxx=Math.max(mxx,p[0]);mny=Math.min(mny,p[1]);mxy=Math.max(mxy,p[1]);}
     const disc=state.discR.has(key);
     R={id:key,i,j,seed:S,poly,bb:[mnx,mny,mxx,mxy],pois:(world.poiByCell&&world.poiByCell.get(key))||[],name:null,discovered:disc,rev:disc?0:1};
-    nameRegion(R);REGION_CACHE.set(key,R);return R;}
+    nameRegion(R);REGION_CACHE.set(key,R);
+    if(REGION_CACHE.size>4000){for(const k of REGION_CACHE.keys()){const v=REGION_CACHE.get(k);   // BORNE : sans elle, chaque pan accumule jusqu'à 1500 cellules → refreshNames (régions × lieux) devenait quadratique sur longue session
+      if(!v.discovered){REGION_CACHE.delete(k);if(REGION_CACHE.size<=3500)break;}}}   // on n'évince QUE les non-découvertes (recréables à l'identique : seed déterministe) ; les découvertes restent = seules visibles au dézoom « planète »
+    return R;}
   // contrées chevauchant l'écran (génération paresseuse + cache). Au-delà de GRID_CAP cellules (fort dézoom
   // → « planète »), on NE génère PAS toute la grille (sinon freeze) : on ne rend que les contrées DÉCOUVERTES.
   const GRID_CAP=1500;
@@ -669,7 +673,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Dédup par clé géo+nom → une même chose vue par 2 sources fusionne (Overpass enrichit les tags wiki des lieux des tuiles).
   // forZone (optionnel) = id de la commune pour laquelle ce lot a été chargé (loadZoneSites) → on RATTACHE ces sites à CETTE commune
   // (au lieu de recalculer via le contour, qui peut différer d'un appareil à l'autre) → même vivier de commune partout.
-  function ingestOSM(d,forZone){if(!d||!world)return;const toMx=lng=>(lng-world.C.lng)*world.lngM,toMy=lat=>(lat-world.C.lat)*LATM;
+  function ingestOSM(d,forZone){if(!d||!world)return;const toMx=lng=>(((lng-world.C.lng+540)%360)-180)*world.lngM,toMy=lat=>(lat-world.C.lat)*LATM;   // même normalisation antiméridien que lngLatToM/m2 (cohérence)
     for(const p of (d.places||[])){const k=p.t+'|'+p.name+'|'+p.lng.toFixed(4);if(world._placeKeys.has(k))continue;world._placeKeys.add(k);world.places.push({x:toMx(p.lng),y:toMy(p.lat),name:p.name,t:p.t});}
     if(!world.commune)world.commune=computeCommune(world.places);
     let added=false,changed=false;   // changed = une fusion a muté un site (promotion tuile→OSM = coords, ou enrichissement wiki/wd/desc = tier) → recalcul nécessaire
@@ -701,13 +705,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // On garde l'id (clé) existant → une découverte déjà acquise (state.discP) reste valable.
   function mergePoi(ex,P,src){let ch=false;
     if(!ex.wiki&&P.wiki){ex.wiki=P.wiki;ch=true;}if(!ex.wd&&P.wd){ex.wd=P.wd;ch=true;}if(!ex.desc&&P.desc){ex.desc=P.desc;ch=true;}
-    if(src==='osm'&&ex.src!=='osm'){ex.src='osm';ex.x=(P.lng-world.C.lng)*world.lngM;ex.y=(P.lat-world.C.lat)*LATM;ex.lng=P.lng;ex.lat=P.lat;if(P.g)ex.g=P.g;if(P.type)ex.type=P.type;ch=true;}
+    if(src==='osm'&&ex.src!=='osm'){ex.src='osm';const _mm=lngLatToM(P.lng,P.lat);ex.x=_mm.x;ex.y=_mm.y;ex.lng=P.lng;ex.lat=P.lat;if(P.g)ex.g=P.g;if(P.type)ex.type=P.type;ch=true;}
     return ch;}   // true = a muté (coords promues ou tags enrichis) → l'appelant refera l'index/les noms
   // Débloque après coup les lieux qu'on a déjà croisés mais qui n'étaient pas encore chargés (fini le « je suis passé et rien »)
   function retroUnlock(){const pts=[{x:state.pl.x,y:state.pl.y}],n=trail.length;
     for(let i=Math.max(0,n-90);i<n;i++)pts.push(trail[i]);
     let cnt=0,gained=0;for(const P of world.pois){if(state.discP.has(P.id)||!P._sel)continue;   // uniquement la sélection plafonnée (cohérent avec la marche en direct)
-      for(const q of pts){if(Math.hypot(q.x-P.x,q.y-P.y)<CONFIG.poi.reachRadius){const z=world._zoneById.get(P._zone);if(z&&z.discovered){gained+=tierXP(P);reachPOI(P,z,true);cnt++;}break;}}}
+      for(const q of pts){if(Math.hypot(q.x-P.x,q.y-P.y)<CONFIG.poi.reachRadius){const z=world._zoneById.get(P._zone);if(z&&z.discovered&&reachPOI(P,z,true)){gained+=tierXP(P);cnt++;}break;}}}   // compté SEULEMENT si vraiment débloqué (site en zone rouge refusé → le toast n'annonce plus une XP jamais créditée)
     if(cnt)toast('poi','✦',cnt+' site'+(cnt>1?'s':'')+' découvert'+(cnt>1?'s':'')+' en chemin','+'+gained+' XP');}
   const POI_PER_CELL=18; // nb max de lieux affichés/atteignables par ZONE (les tuiles en fournissent beaucoup)
   const SITE_RANK={peak:6,view:6,castle:6,monument:5,museum:5,ruins:4,worship:3,art:3,curio:2,fountain:1}; // « marquant » d'abord
@@ -750,7 +754,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function refreshNames(){for(const R of REGION_CACHE.values())nameRegion(R);}
   // ---- VRAIS TERRITOIRES : polygones de COMMUNE (admin_level 8, Overpass) = bornes + noms RÉELS ----
   // Respecte les vraies frontières administratives/pays → fini le mélange Suisse/France. Fond + cache + retry.
-  const m2=(lng,lat)=>[(lng-world.C.lng)*world.lngM,(lat-world.C.lat)*LATM];
+  const m2=(lng,lat)=>[(((lng-world.C.lng+540)%360)-180)*world.lngM,(lat-world.C.lat)*LATM];   // même normalisation antiméridien que lngLatToM
   const ringKey=p=>Math.round(p[0])+','+Math.round(p[1]);
   function stitchRings(ways){const used=new Array(ways.length).fill(false),rings=[];
     for(let i=0;i<ways.length;i++){if(used[i]||ways[i].length<2)continue;used[i]=true;let ring=ways[i].slice(),chg=true,guard=0;
@@ -834,12 +838,19 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function buildForbidden(f){if(!f||!f.poly||!f.poly.length)return null;
     const rings=[];for(const ring of f.poly){if(!ring||ring.length<3)continue;const rm=ring.map(p=>m2(p[0],p[1])),s=simplifyRing(rm,12);rings.push(s.length>=4?s:rm);}   // lng/lat → mètres MONDE + simplification Douglas-Peucker 12 m → grandes réserves allégées (perf : dessin + point-dans-polygone appelé par sous-pas)
     if(!rings.length)return null;
-    let area=0;for(const r of rings){let a=0;for(let i=0,j=r.length-1;i<r.length;j=i++)a+=(r[j][0]+r[i][0])*(r[j][1]-r[i][1]);area+=Math.abs(a/2);}   // aire (m²) par lacet
+    const ras=rings.map(r=>{let a=0;for(let i=0,j=r.length-1;i<r.length;j=i++)a+=(r[j][0]+r[i][0])*(r[j][1]-r[i][1]);return Math.abs(a/2);});   // aire (m²) par lacet
+    let area=0;for(let i=0;i<rings.length;i++){let hole=false;   // un lacet DANS un lacet plus grand = TROU (enclave civile d'un multipolygone) → il se SOUSTRAIT de l'aire (avant : additionné → une vraie base de 25 km² avec enclave passait le plafond de 40 et était rejetée à tort)
+      for(let j=0;j<rings.length&&!hole;j++){if(j!==i&&ras[j]>ras[i]&&pointInRing(rings[i][0][0],rings[i][0][1],rings[j]))hole=true;}
+      area+=hole?-ras[i]:ras[i];}
+    if(area<=0)area=Math.max.apply(null,ras);   // données étranges (trous mal classés) → repli : le plus grand lacet fait foi
     if(area>FORB_MAX_AREA)return null;   // trop grand (parc régional de centaines de km²) → ce n'est pas une "zone" jouable, on l'ignore
     let bb=[1e18,1e18,-1e18,-1e18];for(const r of rings){const b=ringBB(r);bb=[Math.min(bb[0],b[0]),Math.min(bb[1],b[1]),Math.max(bb[2],b[2]),Math.max(bb[3],b[3])];}
     return {id:f.id,name:f.name||'',kind:f.kind||'forbidden',rings:rings,bb:bb,cx:(bb[0]+bb[2])/2,cy:(bb[1]+bb[3])/2};}
   function ingestForbidden(f){if(!world||!f||world._forbIds.has(f.id))return;const zz=buildForbidden(f);if(!zz)return;world._forbIds.add(f.id);world.forbidden.push(zz);}
-  function loadForbiddenCache(){if(!world)return;const m=forbCacheRead();for(const id in m)ingestForbidden({id:id,name:m[id].name,kind:m[id].kind,poly:m[id].poly});
+  const FORB_TTL=30*86400000;   // 30 j : les zones d'accès bougent peu, mais une base déclassée / un access= retiré sur OSM doit finir par disparaître de la carte
+  function loadForbiddenCache(){if(!world)return;const m=forbCacheRead();
+    let stale=false;const now=Date.now();for(const id in m){if(!m[id].ts||now-m[id].ts>FORB_TTL){delete m[id];stale=true;continue;}ingestForbidden({id:id,name:m[id].name,kind:m[id].kind,poly:m[id].poly});}   // TTL : entrée périmée (ou sans date) ignorée ET purgée → re-fetch au prochain passage dans le secteur (_forbTried est par session)
+    if(stale){try{localStorage.setItem(FORB_KEY,JSON.stringify(m));}catch(e){}}
     if(world.pois&&world.pois.length)reindexPois();checkForbiddenEntry();}   // boot depuis le cache : exclut les sites des zones interdites déjà connues + détecte si on est DÉJÀ dedans (sinon rien jusqu'au prochain fetch)
   // La position (x,y en mètres MONDE) est-elle DANS une zone interdite ? → renvoie la zone (ou null). Utilisé pour couper l'XP des pas + notifier à l'entrée.
   function inForbidden(x,y){if(!world||!world.forbidden.length)return null;
@@ -877,16 +888,17 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       +');out geom 500;';   // ORANGE = uniquement les vrais tags d'accès « passage » (permissive/destination). PAS leisure=nature_reserve : une réserve/parc régional n'a PAS de restriction d'accès (les gens y vivent/circulent) — ce serait absurde.
     const eps=['https://overpass.osm.ch/api/interpreter','https://overpass-api.de/api/interpreter','https://overpass.openstreetmap.fr/api/interpreter'];
     let done=false,fails=0;const ctrls=eps.map(()=>{try{return new AbortController();}catch(_){return null;}});
-    function finish(res){if(done)return;done=true;clearTimeout(to);ctrls.forEach(c=>{if(c){try{c.abort();}catch(_){}}});cb(res);}
+    function finish(res,trunc){if(done)return;done=true;clearTimeout(to);ctrls.forEach(c=>{if(c){try{c.abort();}catch(_){}}});cb(res,trunc);}
     const to=setTimeout(()=>finish(null),35000);
     eps.forEach((ep,i)=>{fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctrls[i]?ctrls[i].signal:undefined})
       .then(r=>r.ok?r.json():Promise.reject(r.status)).then(js=>{if(done)return;if(!js||!js.elements)return Promise.reject('noelem');
         if(js.remark&&/timed?\s*out|timeout|runtime error/i.test(js.remark))return Promise.reject('partial');
+        const trunc=js.elements.length>=500;   // plafond « out geom 500 » atteint → réponse TRONQUÉE (secteur dense) : l'appelant re-couvre en quadrants (sinon des zones au-delà des 500 ne seraient JAMAIS chargées)
         const out=[];for(const e of js.elements){const nm=(e.tags&&e.tags.name)||'';
           const kind=forbKind(e.tags);   // rouge (interdit) vs orange (passage) selon les tags
           if(e.type==='way'&&e.geometry&&e.geometry.length>=4){const g=e.geometry,a=g[0],b=g[g.length-1];if(a.lon===b.lon&&a.lat===b.lat)out.push({id:'f'+e.id,name:nm,kind:kind,poly:[g.map(p=>[p.lon,p.lat])]});}   // way accepté SEULEMENT s'il est fermé (1er = dernier point) → plus de zone fantôme par corde implicite d'une ligne (chemin/clôture)
           else if(e.type==='relation'&&e.members){const rings=stitchForbiddenRings(e.members);if(rings.length)out.push({id:'r'+e.id,name:nm,kind:kind,poly:rings});}}   // grandes zones = relations multipolygones
-        finish(out);})
+        finish(out,trunc);})
       .catch(()=>{if(done)return;fails++;if(fails>=eps.length)finish(null);});});
   }
   // Récolte throttlée des zones interdites du VIEWPORT (1 fois par cellule ~5 km ; réessai si échec réseau)
@@ -898,8 +910,16 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     // On interroge TOUT le secteur (~6,7 km autour du centre), pas seulement le viewport → la cellule ~5 km marquée « tried » est vraiment couverte (sinon une base à 2-3 km n'était jamais chargée)
     const D=0.06,Dl=0.06/Math.max(0.2,Math.cos(c.lat*Math.PI/180));
     const bb=(c.lat-D)+','+(c.lng-Dl)+','+(c.lat+D)+','+(c.lng+Dl);
-    forbiddenFetchBB(bb,function(list){if(!list){world._forbTried.delete(key);return;}const added=[];for(const f of list){if(!world._forbIds.has(f.id)){ingestForbidden(f);added.push(f);}}if(added.length){forbCacheAddMany(added);if(world.pois&&world.pois.length)reindexPois();checkForbiddenEntry();if(window.__wake)__wake(400);}});   // re-index → sites dans la zone fraîchement chargée disparaissent ; check entrée → bandeau si on est DÉJÀ dedans (arrivé avant le fetch)
+    const myGen=bgGen;
+    forbiddenFetchBB(bb,function(list,trunc){if(!list){world._forbTried.delete(key);return;}forbIngestList(list);
+      if(trunc){   // secteur DENSE (≥500 éléments = réponse tronquée) → re-couverture en 4 QUADRANTS étalés : les zones au-delà du plafond finissent par arriver (avant : jamais chargées, silencieusement)
+        const qs=[[c.lat-D,c.lng-Dl,c.lat,c.lng],[c.lat-D,c.lng,c.lat,c.lng+Dl],[c.lat,c.lng-Dl,c.lat+D,c.lng],[c.lat,c.lng,c.lat+D,c.lng+Dl]];
+        qs.forEach(function(q,i){setTimeout(function(){if(bgGen!==myGen)return;forbiddenFetchBB(q.join(','),function(l2){if(bgGen===myGen&&l2)forbIngestList(l2);});},2500*(i+1));});}});   // 1 sous-requête / 2,5 s (courtoisie Overpass) ; pas de récursion plus profonde (4×500 = très large)
   }
+  // Ingestion d'une liste de zones d'accès fraîchement reçues : dédoublonne, cache, ré-indexe les sites, re-check l'entrée.
+  function forbIngestList(list){if(!world||!list||!list.length)return;const added=[];for(const f of list){if(!world._forbIds.has(f.id)){ingestForbidden(f);added.push(f);}}
+    forbCacheAddMany(list);   // TOUTE la liste (pas seulement les nouvelles) → le ts d'une zone RE-CONFIRMÉE par Overpass est rafraîchi : elle n'expire plus à 30 j alors qu'elle est toujours valide sur OSM (1 écriture par récolte, inchangé)
+    if(added.length){if(world.pois&&world.pois.length)reindexPois();checkForbiddenEntry();if(window.__wake)__wake(400);}}   // re-index → sites dans la zone fraîchement chargée disparaissent ; check entrée → bandeau si on est DÉJÀ dedans (arrivé avant le fetch)
   const hatchPats={};   // motifs de hachures par type : ROUGE (= sites) = interdit, JAUNE (= marqueurs) = passage (créés une fois, réutilisés)
   function forbiddenHatch(kind){if(hatchPats[kind])return hatchPats[kind];const cv=document.createElement('canvas');cv.width=cv.height=8;const g=cv.getContext('2d');
     g.strokeStyle=kind==='passage'?'rgba(176,132,39,0.5)':'rgba(164,36,59,0.5)';g.lineWidth=1.4;g.beginPath();g.moveTo(-2,6);g.lineTo(6,-2);g.moveTo(0,8);g.lineTo(8,0);g.moveTo(2,10);g.lineTo(10,2);g.stroke();
@@ -1072,16 +1092,23 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function critAlert(msg){var c=document.getElementById('critAlert');if(!c)return;if(msg){c.textContent=msg;c.classList.add('show');}else c.classList.remove('show');}   // bandeau on-écran pour les alertes critiques (ne dépend PAS de la permission notifications)
   // la sauvegarde de la PROGRESSION est prioritaire : si le stockage est plein, on sacrifie le cache OSM,
   // et si ça échoue encore on PRÉVIENT le joueur (jamais d'échec silencieux → perte de progression)
-  function save(){if(!world)return;const js=JSON.stringify({   // garde : dirty peut être vrai avant l'init du monde → sans ça, world.C.lng jetterait en boucle
+  function save(){if(!world)return false;const js=JSON.stringify({   // garde : dirty peut être vrai avant l'init du monde → sans ça, world.C.lng jetterait en boucle. Renvoie true si la progression est bien écrite.
     C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck, rotMap:!!state.rotMap, gf:!!state.gpsFounded,
     discR:[...state.discR],discC:[...state.discC],discPays:[...state.discPays],discCont:[...state.discCont],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
     try{localStorage.setItem(SAVE_KEY,js);}
     catch(e){purgeOsmCache(0);
-      try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(k.indexOf('pas1001_comm')===0||k.indexOf('pas1001_zones')===0))localStorage.removeItem(k);}}catch(_){} // en dernier recours, sacrifie aussi le cache des contrées/zones
+      try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(k.indexOf('pas1001_comm')===0||k.indexOf('pas1001_zones')===0))localStorage.removeItem(k);}}catch(_){} // vague 1 : cache des contrées/zones
       try{localStorage.setItem(SAVE_KEY,js);}
-      catch(e2){if(!saveWarned){saveWarned=true;toast('r','⚠','Sauvegarde impossible','Stockage du navigateur plein ou bloqué');}
-        critAlert('⚠ Sauvegarde impossible — stockage plein ou bloqué. Ta progression risque de ne pas être conservée. Libère de l\'espace.');return;}}   // bandeau VISIBLE même sans permission notifications
-    dirty=false;critAlert(null);}   // succès → efface l'éventuelle alerte de sauvegarde
+      catch(e2){
+        try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(k===FORB_KEY||k.indexOf('pas1001_osm')===0||k.indexOf('pas1001_comm')===0||k.indexOf('pas1001_zones')===0))localStorage.removeItem(k);}}catch(_){} // vague 2 : le cache des zones interdites + re-balayage des caches (tous RECONSTRUCTIBLES par fetch). ⚠️ JAMAIS les données utilisateur : saves (tous modes), REPÈRES, ancres podomètre, _bak — les balayer gagnait ~qq Ko et détruisait de la progression (attrapé en revue adverse)
+        try{localStorage.setItem(SAVE_KEY,js);}
+        catch(e3){try{localStorage.removeItem(AVATAR_KEY);}catch(_){}   // vague 3, ultime recours : la photo de profil (50-150 Ko, recréable) plutôt que la progression
+          try{localStorage.setItem(SAVE_KEY,js);}
+          catch(e4){if(!saveWarned){saveWarned=true;toast('r','⚠','Sauvegarde impossible','Stockage du navigateur plein ou bloqué');}
+            critAlert('⚠ Sauvegarde impossible — stockage plein ou bloqué. Ta progression risque de ne pas être conservée. Libère de l\'espace.');return false;}}}}   // bandeau VISIBLE même sans permission notifications
+    dirty=false;critAlert(null);
+    if(pedAnchorDirty){pedSaveTotal(pedLastTotal);pedAnchorDirty=false;}   // ancre podomètre persistée APRÈS la progression (crédit ATOMIQUE : l'ancre n'avance sur disque que si les pas crédités sont sauvés → jamais de pas perdus, fenêtre de double-crédit ≈ 0)
+    return true;}   // succès → efface l'éventuelle alerte de sauvegarde
   function applySaved(d){
     state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;state.passAck=!!d.passAck;state.rotMap=!!d.rotMap;state.gpsFounded=!!d.gf;
     // discR/compR = ids de ZONES réelles ('c'+id). On ignore les anciennes clés Voronoï ('i,j') des sauvegardes d'avant → compteur exact ; reconcileZones() re-révèle depuis les lieux débloqués.
@@ -1099,7 +1126,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function checkAch(){}   // succès retirés
   const discToastNames=new Set(); // pour ne pas répéter « Zone découverte » pour un même nom
   // Découvrir une ZONE réelle (commune/quartier OSM) = lever sa brume sur sa VRAIE forme (bloc « Zone découverte »)
-  function discoverZone(Z){if(!Z)return;loadZoneSites(Z); // vivier COMPLET de la commune où l'on entre/est (zone COURANTE uniquement → pas de rafale de fetch sur TOUTES les communes déjà découvertes)
+  function discoverZone(Z){if(!Z)return;
+    if(!DEV&&geoFirst&&!bootHadSave)return;   // distribuable NOUVEAU joueur : AUCUNE découverte tant que le 1er VRAI relevé GPS n'est pas arrivé (position = centre par défaut → « zone fantôme » ; couvre revealStart au boot ET afterMove déclenché par le podomètre avant le fix). Même verrou qu'ensureZone ; un joueur EXISTANT (bootHadSave) repart de sa vraie dernière position.
+    loadZoneSites(Z); // vivier COMPLET de la commune où l'on entre/est (zone COURANTE uniquement → pas de rafale de fetch sur TOUTES les communes déjà découvertes)
     if(Z.continent&&!state.discCont.has(Z.continent)){state.discCont.add(Z.continent);dirty=true;toast('r','◈','Continent découvert',Z.continent);if(window.__wake)__wake(1600);}  // niveaux SUPÉRIEurs (continent > pays > contrée) — AVANT le guard : se déclenchent AUSSI au backfill d'une zone déjà découverte (persistée → jamais re-toastée)
     if(Z.pays&&!state.discPays.has(Z.pays)){state.discPays.add(Z.pays);dirty=true;toast('r','◈','Pays découvert',Z.pays);if(window.__wake)__wake(1600);}
     if(Z.contree&&!state.discC.has(Z.contree)){state.discC.add(Z.contree);dirty=true;toast('r','◈','Contrée découverte',shortContree(Z.contree));if(window.__wake)__wake(1600);}
@@ -1110,11 +1139,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // « Zone complétée » : SEULEMENT si le vivier Overpass COMPLET est chargé (`_sitesFull`) — sinon on complèterait 1-2 sites de l'aperçu
   // TUILES avant l'arrivée des vraies données → fausse complétion + bonus XP indus, persistés. Appelée à la découverte d'un site ET à l'arrivée du vivier complet.
   function checkZoneComplete(Z){if(Z&&Z._sitesFull&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);const bonus=Z.pois.length*CONFIG.xp.completePerSite;state.xp+=bonus;dirty=true;toast('r','★','Zone complétée !',Z.name+' · +'+bonus+' XP');if(window.__wake)__wake(1000);}}
-  function reachPOI(P,Z,silent){const _fz=inForbidden(P.x,P.y);if(_fz&&_fz.kind==='forbidden')return;   // sécurité : jamais débloquer un site dans une zone INTERDITE (rouge) ; en zone de PASSAGE (orange) les sites restent visitables
+  function reachPOI(P,Z,silent){const _fz=inForbidden(P.x,P.y);if(_fz&&_fz.kind==='forbidden')return false;   // sécurité : jamais débloquer un site dans une zone INTERDITE (rouge) ; en zone de PASSAGE (orange) les sites restent visitables
     state.discP.add(P.id);P.tSeal=performance.now();const gain=tierXP(P);state.xp+=gain;dirty=true;if(window.__wake)__wake(1000); // réveil pour l'anim du sceau
     if(!silent)toast('poi',POI_GLYPH[P.g]||'✦','Site découvert +'+gain+' XP',P.n);
     checkZoneComplete(Z);
-    checkAch();}
+    checkAch();return true;}   // true = vraiment débloqué → les compteurs des appelants (retroUnlock) ne mentent plus quand la garde zone rouge refuse
 
   // ---- Carte ----
   // Style PARCHEMIN sur-mesure (look carte de MMORPG fantasy) sur les tuiles vectorielles OSM
@@ -1157,7 +1186,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // mètres -> lngLat -> écran
   function mToLngLat(x,y){return [world.C.lng + x/world.lngM, world.C.lat + y/LATM];}
   function proj(x,y){const p=map.project(mToLngLat(x,y));return p;}
-  function lngLatToM(lng,lat){return {x:(lng-world.C.lng)*world.lngM, y:(lat-world.C.lat)*LATM};}
+  function lngLatToM(lng,lat){const dl=((lng-world.C.lng+540)%360)-180;return {x:dl*world.lngM, y:(lat-world.C.lat)*LATM};}   // Δlng normalisé [-180,180) : robuste autour de l'antiméridien (identité stricte pour |Δ|<180 = aucun changement en Europe)
   function playerLngLat(){return mToLngLat(state.pl.x,state.pl.y);}
 
   // ---- Contrôles ----
@@ -1398,7 +1427,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=141;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=152;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1556,7 +1585,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     loadArea(C,ok=>{if(ok){lastFetch={x:0,y:0};save();toast('r','◈','Région chargée',(world.commune||'Exploration libre'));}});loadZoneCache();loadForbiddenCache();}
   // Aller à un lieu/ville : si c'est PROCHE (< 4 km) on s'y déplace sans effacer la progression ; sinon nouvelle région
   function goTo(lng,lat,label){
-    if(world){const d=Math.hypot((lng-world.C.lng)*world.lngM,(lat-world.C.lat)*LATM);
+    if(world){const _gm=lngLatToM(lng,lat),d=Math.hypot(_gm.x,_gm.y);   // via lngLatToM → même normalisation antiméridien partout
       if(d<4000){const m=lngLatToM(lng,lat);state.pl.x=m.x;state.pl.y=m.y;trail.length=0;control.target=null;
         follow=true;recenterBtn.classList.remove('show');map.setCenter([lng,lat]);revealStart();save();maybeFetchArea();
         toast('r','◈','Destination',label);return;}}
@@ -1954,6 +1983,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       items.push({nm:nm,cx:c.x,cy:c.y,bw:fctx.measureText(nm).width+ph});}
     fctx.letterSpacing='0px';
     let minSep=Infinity;   // séparation du couple le plus serré : sep<1 ⇒ les boîtes se chevauchent
+    // ⚠️ Mesure volontairement en repère ÉCRAN (build 150 avait tenté « nord en haut » pour rendre le fondu invariant par rotation —
+    // REVERTÉ : les cartouches restent alignés aux axes de l'écran, donc mesurer dans un autre repère laissait deux cartouches proches
+    // en diagonale SE SUPERPOSER à pleine opacité quand la rotation les aligne = violation du « jamais de superposition » (builds 85-89).
+    // Le fondu qui varie pendant la rotation est le comportement HONNÊTE : il suit le vrai risque de chevauchement à l'écran.
     for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){const a=items[i],b=items[j];
       const sep=Math.max(Math.abs(a.cx-b.cx)/((a.bw+b.bw)/2), Math.abs(a.cy-b.cy)/bh);
       if(sep<minSep)minSep=sep;}
@@ -2252,11 +2285,16 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       if(geoQuar&&Math.hypot(m.x-geoQuar.x,m.y-geoQuar.y)<=CONFIG.gps.maxJump){geoQuar=null;}  // confirmé → on applique ci-dessous
       else{geoQuar={x:m.x,y:m.y};gpsChip(gpsLabel(acc),true);return;}                            // 1er saut → quarantaine, on ne bouge pas
     } else geoQuar=null;
-    state.pl.x=m.x;state.pl.y=m.y;
     const jit=Math.max(CONFIG.gps.minStep,(isFinite(acc)?acc:0)*0.5);   // seuil anti-jitter = max(pas mini, moitié de la précision) : en dessous, le « déplacement » est du bruit GPS, pas un vrai pas
     if(step<jit){state._hsx=m.x;state._hsy=m.y;}   // micro-jitter → ré-ancre le CAP sur place (la « carte orientée » ne pivote plus toute seule à l'arrêt : trackHeadingFrame verra 0 dérive)
-    if(!NATIVE && step>=jit && step<=CONFIG.gps.maxJump) state.dist+=step; // web : ne compter la distance (donc l'XP) que pour un VRAI déplacement → fini les pas/XP gratuits à l'arrêt par jitter. En natif : les pas viennent du podomètre.
-    dirty=true;afterMove();
+    const countDist=(!NATIVE && step>=jit && step<=CONFIG.gps.maxJump); // web : ne compter la distance (donc l'XP) que pour un VRAI déplacement → fini les pas/XP gratuits à l'arrêt par jitter. En natif : les pas viennent du podomètre.
+    // SOUS-PAS ≤60 m aussi pour le VRAI GPS (comme update() en test) : entre 2 relevés espacés (perte de signal, maxJump=150 m),
+    // on ne saute plus par-dessus une zone interdite étroite ni une petite commune (entrée/XP/découverte fiables).
+    // ⚠️ Une RELOCALISATION confirmée (> maxJump : métro, voiture) reste un SAUT SEC : interpoler révélerait une ligne jamais marchée (honnêteté).
+    const ox=state.pl.x,oy=state.pl.y,nseg=(step>1&&step<=CONFIG.gps.maxJump)?Math.max(1,Math.ceil(step/60)):1;
+    for(let i=1;i<=nseg;i++){state.pl.x=ox+(m.x-ox)*i/nseg;state.pl.y=oy+(m.y-oy)*i/nseg;
+      if(countDist)state.dist+=step/nseg;
+      dirty=true;afterMove();}
     if(step>=CONFIG.gps.minStep){if(follow)map.setCenter(playerLngLat());if(window.__wake)__wake(900);} // vrai déplacement SEULEMENT → recentre + réveille le rendu. Le micro-tremblement GPS à l'arrêt ne recentre plus et ne réveille plus → fini la chauffe immobile (avant : setCenter à chaque relevé → move → réveil ~1×/s).
     gpsChip(gpsLabel(acc), acc>40 || state.dist<25); // reste affiché si précision faible ; sinon se cache après 25 m parcourus
   }
@@ -2282,20 +2320,20 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   const PED_TOTAL_KEY='pas1001_pedtotal'+(DEV?'':'_prod2');   // séparé test/distribuable, comme la sauvegarde
   const PED_STEP_CAP=60000;                                   // garde-fou : jamais plus de 60 000 pas crédités d'un coup (glitch / très longue absence)
   let pedLastTotal=(function(){try{var v=localStorage.getItem(PED_TOTAL_KEY);if(v==null)return null;var pv=parseFloat(v);return isFinite(pv)?pv:null;}catch(_){return null;}})();   // isFinite : une valeur corrompue ('NaN') ne doit pas empoisonner l'ancre à chaque boot
-  let pedPending=0, pedFirstCredit=true;                      // pas en attente si la carte n'est pas prête ; 1er crédit = lot « rattrapé »
+  let pedPending=0, pedFirstCredit=true, pedAnchorDirty=false;  // pas en attente si la carte n'est pas prête ; 1er crédit = lot « rattrapé » ; ancre à persister (après save() réussie SEULEMENT)
   function pedSaveTotal(t){try{localStorage.setItem(PED_TOTAL_KEY,String(t));}catch(_){}}
   function pedFlush(){ if(pedPending>0&&world&&ready){ const add=pedPending; pedPending=0; state.dist+=add*0.75;   // 1 pas = 0,75 m
       // XP du lot RATTRAPÉ (app fermée) créditée DIRECTEMENT ici : les pas ont été faits à des positions INCONNUES → bénéfice du doute,
       // jamais coupée par la zone rouge où l'on se trouve en ROUVRANT l'app (fix perte d'XP : marcher dehors, rouvrir dans une base = 0 XP à jamais).
       const want=Math.floor(state.dist/0.75), sg=want-(state.stepXpGiven||0); if(sg>0){ state.xp+=sg; state.stepXpGiven=want; }
-      dirty=true; afterMove(); if(window.__wake)__wake(900); } }
+      dirty=true; pedAnchorDirty=true; afterMove(); if(add>=30)save(); if(window.__wake)__wake(900); } }   // gros lot (rattrapage) → save() SYNCHRONE tout de suite ; petits lots (marche app ouverte) → l'intervalle 1,5 s persiste progression PUIS ancre (pas de stringify complet à chaque pas)
   function pedCredit(total){                                  // total = pas cumulés depuis le boot
     if(!isFinite(total))return;                               // NaN/Infini du capteur → ignoré (sinon gained=NaN → pedPending=NaN → pedFlush bloqué = tous les pas de la session perdus)
     if(pedLastTotal==null){ pedLastTotal=total; pedSaveTotal(total); return; }   // 1re fois : on ancre, rien à créditer
     if(total<pedLastTotal){ pedLastTotal=total; pedSaveTotal(total); return; }   // téléphone redémarré (compteur remis à 0) → on réancre sans créditer
     var gained=total-pedLastTotal; if(gained<=0)return;
     if(gained>PED_STEP_CAP)gained=PED_STEP_CAP;
-    pedLastTotal=total; pedSaveTotal(total);
+    pedLastTotal=total;   // avance EN MÉMOIRE seulement (anti double-comptage entre 2 événements) ; la persistance attend que la progression créditée soit sauvée (pedAnchorDirty dans pedFlush → save())
     pedPending+=gained; pedFlush();
     if(pedFirstCredit){ pedFirstCredit=false; if(gained>=30)toast('r','✦',fmt(gained)+' pas rattrapés','Comptés pendant que l\'app était fermée'); }
   }
