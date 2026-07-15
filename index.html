@@ -755,7 +755,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       // _sel = fait partie de la SÉLECTION plafonnée. TOUS les chemins de déblocage (marche, rétro, arrière-plan) s'y limitent
       // → « atteignable = affiché = compté » identique partout ; un site au-delà du top-18 n'est débloqué par AUCUN chemin.
       for(const p of z.pois){p._sel=true;const c=cellIndexOf(p.x,p.y),k=regionKey(c.i,c.j);let b=byCell.get(k);if(!b){b=[];byCell.set(k,b);}b.push(p);}
-      reach+=z.pois.length;}
+      reach+=z.pois.length;
+      if(z.locs&&z.locs.length)distributeLocPois(z);}   // z.pois vient d'être reconstruit → re-répartit dans les localités (sinon L.pois pointe sur d'anciens objets)
     world.poiByCell=byCell;world.knownPOIs=Math.max(reach,state.discP.size);}
   function refreshNames(){for(const R of REGION_CACHE.values())nameRegion(R);}
   // ---- VRAIS TERRITOIRES : polygones de COMMUNE (admin_level 8, Overpass) = bornes + noms RÉELS ----
@@ -832,7 +833,100 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       ids.sort((a,b)=>{const da=state.discR.has(a)?1:0,db=state.discR.has(b)?1:0;if(da!==db)return da-db;return (m[a].ts||0)-(m[b].ts||0);});
       for(let i=0;i<ids.length-ZCACHE_MAX;i++)delete m[ids[i]];}
     localStorage.setItem(ZCACHE_KEY,JSON.stringify(m));}catch(e){}}
-  function loadZoneCache(){const m=zoneCacheRead();for(const id in m){const c=m[id];ingestZoneRaw({id:id,name:c.name,lvl:c.lvl,poly:c.poly,contree:c.contree||'',pays:c.pays||'',continent:c.continent||'',contreeV:c.contreeV||0});}}
+  function loadZoneCache(){const m=zoneCacheRead();for(const id in m){const c=m[id];ingestZoneRaw({id:id,name:c.name,lvl:c.lvl,poly:c.poly,contree:c.contree||'',pays:c.pays||'',continent:c.continent||'',contreeV:c.contreeV||0});}
+    for(const Z of world.communes){if(Z.discovered&&!state.fullR.has(Z.id)&&Z.locs===undefined){const c=locsCacheRead(Z.id);if(c)ingestLocsRaw(Z,c);}}}   // boot : re-matérialise les localités des communes partiellement explorées (cache SEULEMENT, zéro réseau — la commune courante, elle, se re-fetch au besoin via ensureZone)
+  // ---- LOCALITÉS = sous-zones RÉELLES d'une commune (anciennes communes / communes déléguées, admin_level 9-11 OSM) ----
+  // RIEN d'inventé (décision Étienne) : là où OSM n'a AUCUN découpage réel, la commune reste d'UN SEUL BLOC.
+  // Modèle : state.fullR = communes révélées EN ENTIER (anciens saves migrés, communes sans localités, repli échec réseau
+  // prolongé) ; state.discL = localités découvertes. Une commune découverte HORS fullR ne dévoile QUE ses localités
+  // découvertes ; tant que ses localités ne sont pas connues (fetch en cours), RIEN n'est dévoilé sauf le halo du joueur
+  // → on n'a JAMAIS à re-brumer après coup. Z.locs : undefined = pas encore su ; [objets zone] = découpage réel.
+  const LOCS_KEY='pas1001_locs_v1_',LOCS_CACHE_MAX=40;
+  function locsCacheRead(zid){try{const v=JSON.parse(localStorage.getItem(LOCS_KEY+zid)||'null');return (v&&Array.isArray(v.locs))?v.locs:null;}catch(e){return null;}}
+  function locsCacheWrite(zid,locs){try{localStorage.setItem(LOCS_KEY+zid,JSON.stringify({ts:Date.now(),locs:locs}));
+    const ks=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf(LOCS_KEY)===0)ks.push(k);}
+    if(ks.length>LOCS_CACHE_MAX){const its=ks.map(k=>{let ts=0;try{ts=(JSON.parse(localStorage.getItem(k)||'null')||{}).ts||0;}catch(_){}
+        const zid2=k.slice(LOCS_KEY.length);return {k:k,ts:ts,prot:(state.discR.has(zid2)&&!state.fullR.has(zid2))?1:0};});   // prot : commune EXPLORÉE à localités → son terrain déjà révélé dépend de cette géométrie au boot
+      its.sort((a,b)=>(a.prot-b.prot)||(a.ts-b.ts));let over=its.length-LOCS_CACHE_MAX;
+      for(let i=0;i<its.length&&over>0;i++){if(its[i].prot)break;localStorage.removeItem(its[i].k);over--;}}}catch(e){}}   // LRU : on n'évince QUE des non-protégées (les évincées se re-fetchent ; l'auto-guérison couvre le reste)
+  function locSetNone(Z){Z.locs=[];if(!state.fullR.has(Z.id)){state.fullR.add(Z.id);dirty=true;if(window.__wake)__wake(1600);}}   // pas de découpage réel connu → bloc entier, DÉFINITIF (jamais de re-brumage)
+  function ingestLocsRaw(Z,arr){   // arr = [{id,name,lvl,poly lng/lat}] déjà filtrés (niveau + appartenance)
+    if(!arr||!arr.length){locSetNone(Z);return;}
+    const locs=[];for(const c of arr){const zz=buildZone({id:c.id,name:c.name,lvl:c.lvl,poly:c.poly});if(!zz)continue;
+      zz.discovered=state.discL.has(zz.id);zz.rev=zz.discovered?0:1;locs.push(zz);}
+    if(!locs.length){locSetNone(Z);return;}
+    Z.locs=locs;distributeLocPois(Z);
+    for(let i=Math.max(0,trail.length-90);i<trail.length;i++)discoverLocAt(Z,trail[i].x,trail[i].y,true);   // rattrape les localités TRAVERSÉES pendant le chargement (trace récente éphémère, comme retroUnlock pour les sites)
+    checkLocEntry();if(window.__wake)__wake(900);}   // les données arrivent → découvre tout de suite la localité où l'on se tient déjà (avec toast)
+  // Répartit les sites de la commune dans ses localités (L.pois) → la boucle des sceaux dessine PAR forme révélée :
+  // un site dans une localité encore brumeuse n'est ni dessiné ni cliquable (honnête : visible = atteignable = compté).
+  function distributeLocPois(Z){if(!Z.locs||!Z.locs.length)return;
+    for(const L of Z.locs)L.pois=[];
+    for(const P of (Z.pois||[])){for(const L of Z.locs){if(P.x<L.bb[0]||P.x>L.bb[2]||P.y<L.bb[1]||P.y>L.bb[3])continue;
+      let ins=false;for(const r of L.rings)if(pointInRing(P.x,P.y,r))ins=!ins;if(ins){L.pois.push(P);break;}}}}
+  function locAtDiscovered(Z,x,y){if(!Z.locs)return false;   // (x,y) est-il dans une localité DÉCOUVERTE de Z ? (halo du joueur)
+    for(const L of Z.locs){if(!L.discovered||x<L.bb[0]||x>L.bb[2]||y<L.bb[1]||y>L.bb[3])continue;
+      let ins=false;for(const r of L.rings)if(pointInRing(x,y,r))ins=!ins;if(ins)return true;}return false;}
+  function discoverLocAt(Z,x,y,silent){   // découvre la localité de Z contenant (x,y) → true si nouvelle découverte
+    if(!Z.locs)return false;
+    for(const L of Z.locs){if(x<L.bb[0]||x>L.bb[2]||y<L.bb[1]||y>L.bb[3])continue;
+      let ins=false;for(const r of L.rings)if(pointInRing(x,y,r))ins=!ins;if(!ins)continue;
+      if(L.discovered)return false;
+      L.discovered=true;L.rev=1;L.tDisc=performance.now();state.discL.add(L.id);dirty=true;
+      if(!silent)toast('r','❖','Localité découverte',L.name);if(window.__wake)__wake(3200);return true;}
+    return false;}   // entre deux localités (liseré de frontière) → rien : le halo du joueur assure la visibilité immédiate
+  function checkLocEntry(){if(!world)return;const Z=zoneAt(state.pl.x,state.pl.y);
+    if(!Z||!Z.discovered||state.fullR.has(Z.id)||!Z.locs||!Z.locs.length)return;
+    if(discoverLocAt(Z,state.pl.x,state.pl.y,false))return;
+    // Dans la commune mais dans AUCUNE localité, et LOIN de toutes (>150 m de chaque bbox) = vrai TROU de couverture
+    // (le découpage OSM ne pave pas toute la commune ici) → repli honnête : bloc entier (comportement d'avant),
+    // plutôt qu'un joueur qui marcherait sous brume à jamais. Un simple liseré entre deux localités reste au halo.
+    let near=1e18;for(const L of Z.locs){const dx=Math.max(L.bb[0]-state.pl.x,0,state.pl.x-L.bb[2]),dy=Math.max(L.bb[1]-state.pl.y,0,state.pl.y-L.bb[3]);const d=Math.hypot(dx,dy);if(d<near)near=d;}
+    if(near>150)locSetNone(Z);}
+  // Fetch Overpass des localités d'une commune : miroirs MONDIAUX seulement (.de/.fr) — PAS osm.ch : il ne couvre que la
+  // Suisse et répondrait « vide » (succès !) pour une commune française → fausse conclusion « pas de localités ».
+  function locsFetchBB(bb,cb){
+    const q='[out:json][timeout:30];(relation["boundary"="administrative"]["admin_level"~"^(9|10|11)$"]('+bb+'););out geom;';
+    const eps=['https://overpass-api.de/api/interpreter','https://overpass.openstreetmap.fr/api/interpreter'];
+    let done=false,fails=0;const ctrls=eps.map(()=>{try{return new AbortController();}catch(_){return null;}});
+    function finish(res){if(done)return;done=true;clearTimeout(to);ctrls.forEach(c=>{if(c){try{c.abort();}catch(_){}}});cb(res);}
+    const to=setTimeout(()=>finish(null),35000);
+    eps.forEach((ep,i)=>{fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctrls[i]?ctrls[i].signal:undefined})
+      .then(r=>r.ok?r.json():Promise.reject(r.status)).then(js=>{if(done)return;if(!js||!js.elements)return Promise.reject('noelem');
+        if(js.remark&&/timed?\s*out|timeout|runtime error/i.test(js.remark))return Promise.reject('partial');
+        finish(js.elements);})
+      .catch(()=>{if(done)return;fails++;if(fails>=eps.length)finish(null);});});}
+  function locInteriorPt(zz){   // point INTÉRIEUR GARANTI : le centroïde d'une forme concave (croissant/L) peut tomber dehors
+    if(pointInRing(zz.cx,zz.cy,zz.rings[0]))return [zz.cx,zz.cy];   // cas courant : centroïde dedans → zéro coût
+    for(const r of zz.rings){   // repli : ligne de balayage au y MÉDIAN de l'anneau → milieu de la 1re paire d'intersections = intérieur (pair/impair)
+      const ys=r.map(p=>p[1]).sort((a,b)=>a-b);const m=Math.floor(ys.length/2);let y=(ys[m-1]+ys[m])/2;if(ys[m-1]===ys[m])y+=0.5;   // évite de passer PILE par un sommet
+      const xs=[];for(let i=0,j=r.length-1;i<r.length;j=i++){const y1=r[i][1],y2=r[j][1];if((y1>y)!==(y2>y))xs.push(r[i][0]+(y-y1)*(r[j][0]-r[i][0])/(y2-y1));}
+      xs.sort((a,b)=>a-b);if(xs.length>=2)return [(xs[0]+xs[1])/2,y];}
+    return [zz.cx,zz.cy];}
+  function selectLocs(Z,els){   // ⚠️ ORDRE : appartenance à CETTE commune D'ABORD, choix du niveau ENSUITE — sinon une ancienne commune (lvl 9) d'une VOISINE dans la bbox force use=9 et fait conclure à tort « sans localités » une commune à quartiers lvl 10 (attrapé en revue adverse)
+    const cand=[];for(const e of els){if(e.type!=='relation'||!e.members||!e.tags||!e.tags.name)continue;
+      const lvl=parseInt(e.tags.admin_level,10);if(!(lvl>=9&&lvl<=11))continue;
+      const rings=stitchForbiddenRings(e.members);if(!rings.length)continue;cand.push({id:'l'+e.id,name:e.tags.name,lvl:lvl,poly:rings});}
+    if(!cand.length)return [];
+    const members=[];for(const c of cand){const zz=buildZone({id:c.id,name:c.name,lvl:c.lvl,poly:c.poly});if(!zz)continue;
+      const p=locInteriorPt(zz);let ins=false;for(const r of Z.rings)if(pointInRing(p[0],p[1],r))ins=!ins;   // appartenance = un point intérieur de la localité DANS la commune
+      if(ins)members.push(c);}
+    if(!members.length)return [];
+    let use=11;for(const c of members)if(c.lvl<use)use=c.lvl;   // niveau le plus HAUT parmi les MEMBRES (pas d'imbrication 9+10)
+    return members.filter(c=>c.lvl===use);}
+  let locsPendingZ=null,locsT=0;
+  function loadZoneLocs(Z){   // 1 requête par commune, cache dur d'abord ; en échec prolongé (hors-ligne long) → bloc entier (comportement d'avant). Appelée uniquement pour la zone qu'on découvre / où l'on est.
+    if(!Z||Z.locs!==undefined||state.fullR.has(Z.id))return;
+    const cached=locsCacheRead(Z.id);if(cached){ingestLocsRaw(Z,cached);return;}
+    const now=performance.now();
+    if(locsPendingZ||now<(Z._locNext||0)||now-locsT<2500)return;locsT=now;locsPendingZ=Z.id;
+    const a=mToLngLat(Z.bb[0],Z.bb[1]),b=mToLngLat(Z.bb[2],Z.bb[3]);
+    const bb=Math.min(a[1],b[1])+','+Math.min(a[0],b[0])+','+Math.max(a[1],b[1])+','+Math.max(a[0],b[0]);
+    const myGen=bgGen;
+    locsFetchBB(bb,function(els){locsPendingZ=null;if(bgGen!==myGen)return;   // reset/changement de ville pendant le fetch → réponse caduque
+      if(els===null){Z._locFail=(Z._locFail||0)+1;Z._locNext=performance.now()+Math.min(480000,15000*Math.pow(2,Z._locFail-1));   // backoff 15 s → 8 min
+        if(Z._locFail>=6)locSetNone(Z);return;}                                       // ~15 min d'échecs (vraiment hors-ligne) → repli honnête : bloc entier
+      const sel=selectLocs(Z,els);locsCacheWrite(Z.id,sel);ingestLocsRaw(Z,sel);});}
   // ---- ZONES INTERDITES (aires militaires réelles OSM) — build 90, étape 1 : AFFICHAGE ----
   // landuse=military + military=danger_area/range/training_area. Données STATIQUES → cache DUR (localStorage), 1 requête par secteur.
   // Rendu = hachures rouge-brun PAR-DESSUS la brume (avertissement toujours visible). Étape suivante : notif à l'entrée + XP/loot désactivés dedans.
@@ -973,6 +1067,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function ensureZone(){if(!world||zonePending)return;
     if(!DEV&&geoFirst)return; // distribuable : AUCUNE découverte tant qu'on n'a pas un VRAI relevé GPS (sinon on révèle le centre par défaut = « contrée fantôme »)
     const Z0=zoneAt(state.pl.x,state.pl.y);
+    if(Z0&&Z0.discovered)loadZoneLocs(Z0);   // re-drive des localités de la commune courante (utile à l'arrêt : retry après échec réseau, gates internes = no-op sinon)
+    if(!locsPendingZ)for(const Zc of world.communes){if(Zc.discovered&&!state.fullR.has(Zc.id)&&Zc.locs===undefined){loadZoneLocs(Zc);break;}}   // AUTO-GUÉRISON : une commune explorée dont la géométrie de localités manque (cache évincé/purgé, autre appareil) se re-fetch en douceur — sans ça, son terrain déjà découvert resterait brumeux au boot (invariant « jamais de re-brumage »)
     if(Z0&&(Z0.contree||Z0._contreeTried))return; // dans une zone qui connaît DÉJÀ sa Contrée (ou déjà tentée) → rien ; sinon on (re)interroge pour BACKFILLER la Contrée (joueur existant, cache d'avant)
     const now=performance.now();
     if(zoneTryPos&&Math.hypot(state.pl.x-zoneTryPos.x,state.pl.y-zoneTryPos.y)>250){zoneFail=0;zoneNextTry=0;}   // le joueur a changé de secteur → le backoff (échecs de l'ancien) ne s'applique plus
@@ -1095,7 +1191,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Sauvegarde SÉPARÉE test/distribuable : la version distribuable démarre TOUJOURS vierge (progression propre),
   // les parties de simulation (test) ne polluent pas ce que verront les vrais joueurs.
   const SAVE_KEY='pas1001_realmap_v3'+(DEV?'':'_prod2');   // _prod2 = remise à zéro de la version distribuable (nouvelle économie d'XP)
-  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',forbAck:false,passAck:false,discR:new Set(),discC:new Set(),discPays:new Set(),discCont:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set()};   // forbAck = « ne plus me rappeler » ROUGE ; passAck = ORANGE (séparés : renoncer à l'orange ne masque JAMAIS l'alerte rouge)  // discC = CONTRÉES/cantons ; discPays = PAYS ; discCont = CONTINENTS découverts (grands niveaux)
+  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',forbAck:false,passAck:false,discR:new Set(),discC:new Set(),discPays:new Set(),discCont:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set(),discL:new Set(),fullR:new Set()};   // forbAck = « ne plus me rappeler » ROUGE ; passAck = ORANGE (séparés : renoncer à l'orange ne masque JAMAIS l'alerte rouge)  // discC = CONTRÉES/cantons ; discPays = PAYS ; discCont = CONTINENTS découverts (grands niveaux)  // discL = LOCALITÉS découvertes ; fullR = communes révélées EN ENTIER (anciens saves / sans localités réelles / repli réseau) — jamais de re-brumage
   const trail=[]; let dirty=false,prevLevel=1,prevTitle=TITLES[0].name;
 
   let saveWarned=false;
@@ -1104,13 +1200,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // et si ça échoue encore on PRÉVIENT le joueur (jamais d'échec silencieux → perte de progression)
   function save(){if(!world)return false;const js=JSON.stringify({   // garde : dirty peut être vrai avant l'init du monde → sans ça, world.C.lng jetterait en boucle. Renvoie true si la progression est bien écrite.
     C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck, rotMap:!!state.rotMap, gf:!!state.gpsFounded,
-    discR:[...state.discR],discC:[...state.discC],discPays:[...state.discPays],discCont:[...state.discCont],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited]});
+    discR:[...state.discR],discC:[...state.discC],discPays:[...state.discPays],discCont:[...state.discCont],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited],discL:[...state.discL],fullR:[...state.fullR]});
     try{localStorage.setItem(SAVE_KEY,js);}
     catch(e){purgeOsmCache(0);
       try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(k.indexOf('pas1001_comm')===0||k.indexOf('pas1001_zones')===0))localStorage.removeItem(k);}}catch(_){} // vague 1 : cache des contrées/zones
       try{localStorage.setItem(SAVE_KEY,js);}
       catch(e2){
-        try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(k===FORB_KEY||k.indexOf('pas1001_osm')===0||k.indexOf('pas1001_comm')===0||k.indexOf('pas1001_zones')===0))localStorage.removeItem(k);}}catch(_){} // vague 2 : le cache des zones interdites + re-balayage des caches (tous RECONSTRUCTIBLES par fetch). ⚠️ JAMAIS les données utilisateur : saves (tous modes), REPÈRES, ancres podomètre, _bak — les balayer gagnait ~qq Ko et détruisait de la progression (attrapé en revue adverse)
+        try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(k===FORB_KEY||k.indexOf('pas1001_osm')===0||k.indexOf('pas1001_comm')===0||k.indexOf('pas1001_zones')===0||k.indexOf('pas1001_locs')===0))localStorage.removeItem(k);}}catch(_){} // vague 2 : caches interdits + localités + re-balayage (tous RECONSTRUCTIBLES par fetch). ⚠️ JAMAIS les données utilisateur : saves (tous modes), REPÈRES, ancres podomètre, _bak — les balayer gagnait ~qq Ko et détruisait de la progression (attrapé en revue adverse)
         try{localStorage.setItem(SAVE_KEY,js);}
         catch(e3){try{localStorage.removeItem(AVATAR_KEY);}catch(_){}   // vague 3, ultime recours : la photo de profil (50-150 Ko, recréable) plutôt que la progression
           try{localStorage.setItem(SAVE_KEY,js);}
@@ -1123,6 +1219,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;state.passAck=!!d.passAck;state.rotMap=!!d.rotMap;state.gpsFounded=!!d.gf;
     // discR/compR = ids de ZONES réelles ('c'+id). On ignore les anciennes clés Voronoï ('i,j') des sauvegardes d'avant → compteur exact ; reconcileZones() re-révèle depuis les lieux débloqués.
     (d.discR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.discR.add(k);});(d.discC||[]).forEach(k=>{if(k)state.discC.add(k);});(d.discPays||[]).forEach(k=>{if(k)state.discPays.add(k);});(d.discCont||[]).forEach(k=>{if(k)state.discCont.add(k);});(d.discP||[]).forEach(k=>state.discP.add(k));(d.compR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.compR.add(k);});(d.ach||[]).forEach(k=>state.ach.add(k));(d.visited||[]).forEach(k=>state.visited.add(k));
+    (d.discL||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='l')state.discL.add(k);});(d.fullR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.fullR.add(k);});
+    if(d.discL===undefined&&d.fullR===undefined)state.discR.forEach(k=>state.fullR.add(k));   // MIGRATION sauvegarde d'avant les Localités : tout ce qui était découvert reste révélé EN ENTIER (on ne re-brume JAMAIS un acquis)
     const li=levelInfo(state.xp);prevLevel=li.level;prevTitle=titleForLevel(li.level);
     const cs=document.getElementById('csPseudo');if(cs)cs.value=state.pseudo;
   }
@@ -1139,13 +1237,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function discoverZone(Z){if(!Z)return;
     if(!DEV&&geoFirst&&!bootHadSave)return;   // distribuable NOUVEAU joueur : AUCUNE découverte tant que le 1er VRAI relevé GPS n'est pas arrivé (position = centre par défaut → « zone fantôme » ; couvre revealStart au boot ET afterMove déclenché par le podomètre avant le fix). Même verrou qu'ensureZone ; un joueur EXISTANT (bootHadSave) repart de sa vraie dernière position.
     loadZoneSites(Z); // vivier COMPLET de la commune où l'on entre/est (zone COURANTE uniquement → pas de rafale de fetch sur TOUTES les communes déjà découvertes)
+    loadZoneLocs(Z);   // localités de la commune où l'on entre/est (même logique de re-drive que les sites : no-op instantané une fois connues)
     if(Z.continent&&!state.discCont.has(Z.continent)){state.discCont.add(Z.continent);dirty=true;toast('r','◈','Continent découvert',Z.continent);if(window.__wake)__wake(1600);}  // niveaux SUPÉRIEurs (continent > pays > contrée) — AVANT le guard : se déclenchent AUSSI au backfill d'une zone déjà découverte (persistée → jamais re-toastée)
     if(Z.pays&&!state.discPays.has(Z.pays)){state.discPays.add(Z.pays);dirty=true;toast('r','◈','Pays découvert',Z.pays);if(window.__wake)__wake(1600);}
     if(Z.contree&&!state.discC.has(Z.contree)){state.discC.add(Z.contree);dirty=true;toast('r','◈','Contrée découverte',shortContree(Z.contree));if(window.__wake)__wake(1600);}
     if(state.discR.has(Z.id))return;Z.discovered=true;Z.rev=1;Z.tDisc=performance.now();state.discR.add(Z.id);dirty=true;if(window.__wake)__wake(3800); // découvrir une zone = 0 XP ; réveil pour l'anim (brume + houppes + sceaux)
     if(Z.name&&!discToastNames.has(Z.name)){discToastNames.add(Z.name);toast('r','❖','Zone découverte',Z.name);}checkAch();}
   // Après (re)chargement des zones : re-révèle SILENCIEUSEMENT celles contenant un lieu déjà débloqué (migration depuis l'ancien modèle, XP déjà acquise)
-  function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);if(z.name)discToastNames.add(z.name);}}}
+  function reconcileZones(){if(!world)return;for(const P of world.pois){if(!state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&!state.discR.has(z.id)){z.discovered=true;z.rev=0;state.discR.add(z.id);state.fullR.add(z.id);if(z.name)discToastNames.add(z.name);}}}   // ré-révélation de migration (site déjà acquis) → bloc entier : on ne sait pas où le joueur a marché dedans
   // « Zone complétée » : SEULEMENT si le vivier Overpass COMPLET est chargé (`_sitesFull`) — sinon on complèterait 1-2 sites de l'aperçu
   // TUILES avant l'arrivée des vraies données → fausse complétion + bonus XP indus, persistés. Appelée à la découverte d'un site ET à l'arrivée du vivier complet.
   function checkZoneComplete(Z){if(Z&&Z._sitesFull&&!state.compR.has(Z.id)&&Z.pois&&Z.pois.length&&Z.pois.every(x=>state.discP.has(x.id))){state.compR.add(Z.id);const bonus=Z.pois.length*CONFIG.xp.completePerSite;state.xp+=bonus;dirty=true;toast('r','★','Zone complétée !',Z.name+' · +'+bonus+' XP');if(window.__wake)__wake(1000);}}
@@ -1218,7 +1317,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     // clic sur un site (verrouillé OU débloqué) → sa FICHE en feuille du BAS ; clic à vide → rien (sauf marche en SIM)
     // UNIQUEMENT au zoom où les sceaux sont VISIBLES (z≥13.3, même seuil que le dessin) : sinon, au fort dézoom, 26 px couvrent des km → un clic sur du brouillard sélectionnait un site lointain et invisible.
     if(map.getZoom()>=13.3){let best=null,bestR=null,bestD=26;
-      for(const Z of world.communes){if(!Z.discovered)continue;for(const P of Z.pois){const pp=proj(P.x,P.y);const d=Math.hypot(pp.x-px,pp.y-py);if(d<bestD){bestD=d;best=P;bestR=Z;}}}
+      for(const Z of world.communes){if(!Z.discovered)continue;const _zl=!state.fullR.has(Z.id)&&Z.locs&&Z.locs.length;
+        for(const P of Z.pois){if(_zl&&!locAtDiscovered(Z,P.x,P.y))continue;   // site dans la partie encore BRUMEUSE d'une commune à localités → invisible donc pas sélectionnable (1× par clic, pas par frame)
+          const pp=proj(P.x,P.y);const d=Math.hypot(pp.x-px,pp.y-py);if(d<bestD){bestD=d;best=P;bestR=Z;}}}
       if(best){openPOI(best,bestR);return;}}
     if(DEV){const m=lngLatToM(e.lngLat.lng,e.lngLat.lat);control.target={x:m.x,y:m.y};}}catch(err){logErr('map-click',err);}}); // distribuable : toucher la carte à vide ne fait rien
   // ── itinéraire qui suit les VRAIES ROUTES (OSRM profil piéton, service libre sans clé) ──
@@ -1442,7 +1543,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=154;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=156;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1532,7 +1633,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   resetBtn.onclick=()=>{if(!rArmed){rArmed=true;resetBtn.textContent='Confirmer ?';resetBtn.classList.add('on');rTimer=setTimeout(()=>{rArmed=false;resetBtn.textContent='Effacer';resetBtn.classList.remove('on');},3000);return;}
     clearTimeout(rTimer);rArmed=false;resetBtn.textContent='Effacer';resetBtn.classList.remove('on');
     bgGen++;   // reset → invalide tout replay différé encore en vol (pas de recrédit après effacement)
-    state.discR.clear();state.discC.clear();state.discPays.clear();state.discCont.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();state.xp=0;state.dist=0;state.stepXpGiven=0;discToastNames.clear();for(const Z of world.communes){Z.discovered=false;Z.rev=1;}
+    state.discR.clear();state.discC.clear();state.discPays.clear();state.discCont.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();state.discL.clear();state.fullR.clear();state.xp=0;state.dist=0;state.stepXpGiven=0;discToastNames.clear();for(const Z of world.communes){Z.discovered=false;Z.rev=1;Z.locs=undefined;Z._locFail=0;Z._locNext=0;}   // locs remis à « pas encore su » → le flux complet se rejoue à la re-découverte (cache = instantané ; sans ça une commune sans découpage gardait Z.locs=[] et fullR vidé = plus jamais révélable de la session — attrapé en revue adverse)
     state.pl.x=0;state.pl.y=0;trail.length=0;prevLevel=1;prevTitle=TITLES[0].name;control.target=null;control.auto=false;autoBtn.classList.remove('on');autoBtn.textContent='Activer';
     clearRoute();tip=null;curPOI=null;poiPanel.classList.remove('open');follow=true;recenterBtn.classList.remove('show');
     map.setCenter([world.C.lng,world.C.lat]);revealStart();save();hint.classList.remove('gone');toast('r','↺','Atlas effacé','La brume recouvre tout');};
@@ -1591,7 +1692,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   function setLocation(lng,lat){const C=[lng,lat];
     initWorld(C);
-    state.pl.x=0;state.pl.y=0;state.xp=0;state.dist=0;state.stepXpGiven=0;state.discR.clear();state.discC.clear();state.discPays.clear();state.discCont.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();discToastNames.clear();
+    state.pl.x=0;state.pl.y=0;state.xp=0;state.dist=0;state.stepXpGiven=0;state.discR.clear();state.discC.clear();state.discPays.clear();state.discCont.clear();state.discP.clear();state.compR.clear();state.ach.clear();state.visited.clear();state.discL.clear();state.fullR.clear();discToastNames.clear();
     trail.length=0;prevLevel=1;prevTitle=TITLES[0].name;control.target=null;lastFetch=null;state.hvx=state.hvy=undefined;state._hsamp=null;state._hsx=state._hsy=undefined;state._hraw=null;state.mapBearing=undefined;
     clearRoute();tip=null;curPOI=null;poiPanel.classList.remove('open'); // rien ne doit pointer vers l'ancien monde
     follow=true;recenterBtn.classList.remove('show');
@@ -1732,6 +1833,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     checkForbiddenEntry(forb);   // ENTRÉE dans une zone interdite → bandeau on-écran + notif
     const lp=trail[trail.length-1];if(!lp||Math.hypot(state.pl.x-lp.x,state.pl.y-lp.y)>=CONFIG.trail.minDist){trail.push({x:state.pl.x,y:state.pl.y});if(trail.length>CONFIG.trail.max)trail.shift();}
     discoverZone(zoneAt(state.pl.x,state.pl.y));
+    checkLocEntry();   // LOCALITÉ courante (sous-zone réelle) : se découvre au passage, comme la commune
     const pc=cellIndexOf(state.pl.x,state.pl.y);
     for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){const arr=world.poiByCell.get(regionKey(pc.i+di,pc.j+dj));if(!arr)continue;
       for(const P of arr){if(state.discP.has(P.id))continue;const z=world._zoneById.get(P._zone);if(z&&z.discovered&&Math.hypot(state.pl.x-P.x,state.pl.y-P.y)<CONFIG.poi.reachRadius)reachPOI(P,z);}}
@@ -1745,7 +1847,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     ensureZone(); // va chercher la vraie forme de la contrée où l'on est (si pas déjà chargée)
     migrateContree(); // remet à niveau (canton) les Contrées de l'ancien schéma, en douceur
     refreshProgressIfOpen(); // panneau de complétion ouvert → se met à jour tout seul quand on change de zone
-    for(const Z of world.communes)if(Z.discovered&&Z.rev>0)Z.rev=Math.max(0,Z.rev-dt/CONFIG.fogLift);
+    for(const Z of world.communes){if(Z.discovered&&Z.rev>0)Z.rev=Math.max(0,Z.rev-dt/CONFIG.fogLift);
+      if(Z.locs)for(const L of Z.locs)if(L.discovered&&L.rev>0)L.rev=Math.max(0,L.rev-dt/CONFIG.fogLift);}   // les LOCALITÉS s'animent comme les communes (sans ça : rev figé à 1 → alpha 0 → une localité découverte ne se révélait JAMAIS — attrapé en revue adverse)
     let dx=0,dy=0,stepCap=Infinity;
     if(DEV){ // déplacement SIMULÉ (joystick / marche auto / clic-cible) — version TEST uniquement ; en distribuable c'est le GPS qui bouge l'avatar
       if(control.joy.active){dx=control.joy.x;dy=-control.joy.y;} // écran bas = sud
@@ -2057,8 +2160,12 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     _zpFrame++;   // invalide le cache de projection des zones : recalculé à la 1re demande de cette frame (la caméra a pu bouger)
     const now=performance.now(),z=map.getZoom();
     fctx.setTransform(dpr,0,0,dpr,0,0);fctx.clearRect(0,0,W,H);
-    // ZONES RÉELLES découvertes, visibles à l'écran (formes de commune/quartier OSM = unité de révélation)
-    const dz=[];for(const Z of world.communes){if(Z.discovered&&zoneOnScreen(Z))dz.push(Z);}
+    // FORMES RÉVÉLÉES visibles à l'écran = l'unité d'effacement de la brume. Commune en bloc (fullR : anciens saves,
+    // pas de localités réelles, repli) OU ses LOCALITÉS découvertes une à une. Localités pas encore connues (fetch en
+    // cours) → RIEN pour cette commune (le halo du joueur prend le relais) : on ne re-brume JAMAIS après coup.
+    const dz=[];for(const Z of world.communes){if(!Z.discovered)continue;
+      if(state.fullR.has(Z.id)){if(zoneOnScreen(Z))dz.push(Z);}
+      else if(Z.locs&&Z.locs.length){for(const L of Z.locs){if(L.discovered&&zoneOnScreen(L))dz.push(L);}}}
     const pxA=proj(0,0),pxB=proj(100,0),pxm=Math.hypot(pxB.x-pxA.x,pxB.y-pxA.y)/100; // échelle mètres→px
     // 1) VOILE DE BRUME : couche crème qui ÉTOUFFE la visibilité de l'inconnu + taches douces VIVANTES (mist)
     fctx.fillStyle='rgba(236,227,203,0.92)';fctx.fillRect(0,0,W,H);
@@ -2071,7 +2178,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     for(const Z of dz){if(Z.rev>0){anim=true;continue;}zonePath(Z);}
     // révélation PERMANENTE « au pas » : un disque sur chaque case déjà foulée (jamais re-brumisé) + halo autour du joueur
     // révélation par ZONE uniquement (pas de traînée « au pas »). Petit halo de vision immédiate SEULEMENT tant que la contrée n'est pas encore chargée/révélée.
-    if(!zoneAt(state.pl.x,state.pl.y))addDisc(state.pl.x,state.pl.y,Math.max(22,CONFIG.reveal.here*pxm));
+    const _pz=zoneAt(state.pl.x,state.pl.y);   // halo de vision immédiate : hors zone chargée, OU dans une commune à localités tant qu'on n'est pas dans une localité DÉCOUVERTE (liseré entre deux, données en route…)
+    if(!_pz||(!state.fullR.has(_pz.id)&&!locAtDiscovered(_pz,state.pl.x,state.pl.y)))addDisc(state.pl.x,state.pl.y,Math.max(22,CONFIG.reveal.here*pxm));
     fctx.fill();
     if(anim)for(const Z of dz){if(Z.rev<=0)continue;fctx.globalAlpha=1-Z.rev;fctx.beginPath();zonePath(Z);fctx.fill();}
     fctx.filter='none';fctx.globalAlpha=1;fctx.globalCompositeOperation='source-over';
@@ -2097,11 +2205,13 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     var progOpen=progPanel.classList.contains('open');   // progression ouverte = ACTIVE le relief + le ping sonar ; tout s'arrête à la fermeture
     if(z>=12&&progOpen){var hz=zoneAt(state.pl.x,state.pl.y);
       if(hz&&hz.discovered){var pulse=0.5+0.5*Math.sin(now/360);
-        fctx.beginPath();zonePath(hz);fctx.lineJoin='round';fctx.lineCap='round';
+        var hzS=state.fullR.has(hz.id)?[hz]:(hz.locs&&hz.locs.length?hz.locs.filter(function(L){return L.discovered;}):[]);   // commune à localités → le relief ne montre QUE le déjà-révélé (jamais la silhouette entière à travers la brume)
+        if(!hzS.length){/* localités pas encore connues → pas de relief */}else{
+        fctx.beginPath();for(var hzi=0;hzi<hzS.length;hzi++)zonePath(hzS[hzi]);fctx.lineJoin='round';fctx.lineCap='round';
         fctx.fillStyle='rgba(185,138,46,'+(0.17+0.11*pulse)+')';fctx.fill();               // remplissage or bien marqué qui « respire »
         fctx.strokeStyle='rgba(164,36,59,'+(0.30+0.28*pulse)+')';fctx.lineWidth=9;fctx.stroke();  // large halo carmin doux (respire)
         fctx.strokeStyle='rgba(164,36,59,0.95)';fctx.lineWidth=3.6;fctx.stroke();           // liseré carmin net
-        fctx.strokeStyle='rgba(243,231,198,0.95)';fctx.lineWidth=1.3;fctx.stroke();}}        // filet crème par-dessus
+        fctx.strokeStyle='rgba(243,231,198,0.95)';fctx.lineWidth=1.3;fctx.stroke();}}}        // filet crème par-dessus
     // ZONES INTERDITES (militaires) : hachures rouge-brun, UNIQUEMENT sur le terrain DÉCOUVERT (clip aux communes révélées → JAMAIS dans la brume). Pas d'étiquette (évite le spam ; le nom viendra dans la notif d'entrée).
     if(z>=11&&world.forbidden.length&&dz.length){
       // clip UNIQUEMENT aux communes découvertes qui contiennent réellement une zone interdite (perf : évite de reclipper des polygones à 4000+ pts pour rien)
@@ -2141,8 +2251,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     }
     // 2) sceaux/verrous des sites (TOUJOURS dessinés) + collecte des étiquettes candidates
     const nameCands=[];
-    if(z>=13.3)for(const Z of dz){const av=1-Z.rev;
-      for(let i=0;i<Z.pois.length;i++){const P=Z.pois[i],pp=proj(P.x,P.y);if(pp.x<-30||pp.x>W+30||pp.y<-30||pp.y>H+30)continue;
+    if(z>=13.3)for(const Z of dz){const av=1-Z.rev,zps=Z.pois||[];   // ||[] : dz contient aussi des LOCALITÉS (leurs pois arrivent par distributeLocPois ; jamais de TypeError si pas encore répartis)
+      for(let i=0;i<zps.length;i++){const P=zps[i],pp=proj(P.x,P.y);if(pp.x<-30||pp.x>W+30||pp.y<-30||pp.y>H+30)continue;
         const disc=state.discP.has(P.id);
         const dist=Math.hypot(state.pl.x-P.x,state.pl.y-P.y),prox=clamp((CONFIG.poi.nameRadius-dist)/CONFIG.poi.nameRadius,0,1);
         const shp=tierShape(siteTier(P));
@@ -2232,7 +2342,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       fctx.strokeStyle='rgba(138,106,58,0.8)';fctx.lineWidth=0.8;
       fctx.beginPath();fctx.moveTo(W/2-130,114);fctx.lineTo(W/2-20,114);fctx.moveTo(W/2+20,114);fctx.lineTo(W/2+130,114);fctx.stroke();
       fctx.fillStyle='#b98a2e';fctx.beginPath();fctx.moveTo(W/2,110);fctx.lineTo(W/2+4,114);fctx.lineTo(W/2,118);fctx.lineTo(W/2-4,114);fctx.closePath();fctx.fill();
-      let discArea=0;for(const Z of world.communes)if(Z.discovered)discArea+=Z.area||0;const pct=discArea/1e6/510e6*100; // km² découverts / superficie de la Terre
+      let discArea=0;for(const Z of world.communes){if(!Z.discovered)continue;
+        if(state.fullR.has(Z.id))discArea+=Z.area||0;
+        else if(Z.locs&&Z.locs.length)for(const L of Z.locs){if(L.discovered)discArea+=L.area||0;}}   // commune à localités : seul le terrain VRAIMENT révélé compte (même règle que le dessin)
+      const pct=discArea/1e6/510e6*100; // km² découverts / superficie de la Terre
       fctx.font='700 10.5px '+FONT_DISPLAY;fctx.letterSpacing='2px';fctx.fillStyle='rgba(164,36,59,0.92)';
       fctx.fillText((pct?pct.toLocaleString('fr-FR',{maximumSignificantDigits:2}):'0')+' % DU MONDE ARPENTÉ',W/2,H-158);fctx.letterSpacing='0px';
       fctx.font='italic 12px '+FONT_SERIF;fctx.fillStyle='rgba(107,82,51,0.7)';
@@ -2384,7 +2497,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   window.__bg={native:NATIVE,plugin:false,enabled:false,replayed:0,err:''};
   function replayUnlockPass(pts){ if(!world||!ready||!pts||!pts.length)return {z:0,s:0};
     var z0=state.discR.size, s0=state.discP.size;
-    for(var j=0;j<pts.length;j++){var Z=zoneAt(pts[j].x,pts[j].y);if(Z)discoverZone(Z);}          // contrées CHARGÉES traversées
+    for(var j=0;j<pts.length;j++){var Z=zoneAt(pts[j].x,pts[j].y);if(Z){discoverZone(Z);
+      if(Z.discovered&&!state.fullR.has(Z.id)&&Z.locs&&Z.locs.length)discoverLocAt(Z,pts[j].x,pts[j].y,true);}}   // contrées CHARGÉES traversées + leurs localités (silencieux : le bgToast résume déjà)
     for(var k=0;k<world.pois.length;k++){var P=world.pois[k];if(state.discP.has(P.id)||!P._sel)continue;    // sites croisés (sélection plafonnée uniquement → marchable = affiché = compté)
       for(var p=0;p<pts.length;p++){if(Math.hypot(pts[p].x-P.x,pts[p].y-P.y)<CONFIG.poi.reachRadius){var zz=world._zoneById.get(P._zone);if(zz&&zz.discovered)reachPOI(P,zz,true);break;}}}
     return {z:state.discR.size-z0, s:state.discP.size-s0}; }
