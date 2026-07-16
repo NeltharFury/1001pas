@@ -68,8 +68,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     background:linear-gradient(180deg,#f7edd2,#eddcb2);box-shadow:inset 0 0 0 2px rgba(250,242,220,.65),0 6px 16px rgba(40,24,6,.3);
     cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
   /* ── retour tactile : les contrôles s'enfoncent au toucher (feel premium) — coupé par prefers-reduced-motion plus bas ── */
-  #searchOpenBtn,#progBtn,#recenterBtn,#simBtn,#identity,button.tg2,#poiRoute,#wcGo,#rbClear{transition:transform .13s cubic-bezier(.2,.8,.3,1),filter .13s ease;}
-  #searchOpenBtn:active,#progBtn:active,#recenterBtn:active,#simBtn:active,#identity:active,button.tg2:active,#poiRoute:active,#wcGo:active,#rbClear:active{transform:scale(.93);}
+  #searchOpenBtn,#progBtn,#recenterBtn,#simBtn,#identity,button.tg2,#poiRoute,#rbClear{transition:transform .13s cubic-bezier(.2,.8,.3,1),filter .13s ease;}
+  #searchOpenBtn:active,#progBtn:active,#recenterBtn:active,#simBtn:active,#identity:active,button.tg2:active,#poiRoute:active,#rbClear:active{transform:scale(.93);}
   @media (hover:hover){#searchOpenBtn:hover,#progBtn:hover,#recenterBtn:hover,#simBtn:hover,#identity:hover{filter:brightness(1.04);}}
   @media (prefers-reduced-motion: no-preference){
     @keyframes hudIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
@@ -330,29 +330,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     cursor:pointer;font-family:var(--display);font-size:11.5px;font-weight:700;letter-spacing:1.5px;color:#f9ecd7;}
   #poiRoute[disabled]{display:none;}
 
-  /* ── accueil ── */
-  #welcome{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:rgba(30,20,8,.55);
-           backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);transition:opacity .4s;}
-  #welcome.hidden{opacity:0;pointer-events:none;}
-  #welcome .wc{max-width:330px;margin:0 20px;text-align:center;padding:26px 24px;}
-  #welcome .wc h1{font-family:var(--display);font-size:21px;font-weight:700;letter-spacing:.14em;margin:8px 0 2px;color:#2f1f0c;}
-  #welcome .wc .sub{font-size:9.5px;letter-spacing:2.6px;color:#7c5a17;font-variant:small-caps;}
-  #welcome .wc p{font-size:14px;line-height:1.55;color:#3c2a14;margin:12px 0;}
-  #welcome .wc .tip{font-size:12.5px;font-style:italic;color:var(--inkSoft);}
-  #welcome .wc button{margin-top:14px;padding:11px 26px;border-radius:21px;border:1px solid rgba(58,10,18,.7);
-    background:linear-gradient(180deg,#b23548,#8c1f30);box-shadow:inset 0 1px 0 rgba(255,220,210,.35),0 5px 14px rgba(90,12,24,.4);
-    cursor:pointer;font-family:var(--display);font-size:11.5px;font-weight:700;letter-spacing:1.5px;color:#f9ecd7;}
-  /* entrée « atlas » de l'accueil : le sceau se frappe comme un cachet de cire, le texte se révèle en cascade */
-  @media (prefers-reduced-motion: no-preference){
-    @keyframes wcStamp{0%{opacity:0;transform:scale(1.55) rotate(-9deg)}60%{opacity:1;transform:scale(.93) rotate(2deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
-    @keyframes wcRise{from{opacity:0;transform:translateY(11px)}to{opacity:1;transform:none}}
-    #welcome:not(.hidden) .wc>svg{animation:wcStamp .72s cubic-bezier(.2,.9,.3,1.15) .05s both;transform-origin:center 60%;}
-    #welcome:not(.hidden) .wc h1{animation:wcRise .5s ease .30s both;}
-    #welcome:not(.hidden) .wc .sub{animation:wcRise .5s ease .38s both;}
-    #welcome:not(.hidden) .wc p{animation:wcRise .5s ease .48s both;}
-    #welcome:not(.hidden) .wc .tip{animation:wcRise .5s ease .58s both;}
-    #welcome:not(.hidden) .wc button{animation:wcRise .5s ease .68s backwards;}
-  }
+  /* (carte d'accueil RETIRÉE build 158 — décision Étienne : « elle n'ajoute rien de concret ».
+     Rien de fonctionnel n'en dépendait : la permission de notification est demandée au 1er pointerdown
+     n'importe où, et la localisation est demandée par MainActivity au lancement du natif.) */
   @media (max-width:380px){ .ident-text{min-width:112px;} #identity{max-width:58vw;} }
   @media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important;} }
 </style>
@@ -503,16 +483,6 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
 
   <div id="toasts" class="hud"></div>
 
-  <div id="welcome" class="hud">
-    <div class="wc card">
-      <img class="crest" alt="" aria-hidden="true" style="width:46px;height:46px">
-      <h1>1001 Pas</h1>
-      <div class="sub">atlas enluminé de votre vie</div>
-      <p>Ta vraie vie devient une carte que tu révèles en marchant. Avance pour lever la brume, découvrir tes zones et leurs sites.</p>
-      <p class="tip" id="wcTip">Astuce : autorise la <b>localisation</b> (🔒) pour que la carte te suive. Tes pas comptent <b>même quand l'app est fermée</b>.</p>
-      <button id="wcGo">EXPLORER</button>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -1543,7 +1513,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=157;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=158;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1796,13 +1766,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       poiBody.innerHTML='<span class="pp-lock">Découvre ce <b style="color:#a4243b">site '+_lbl+'</b> pour gagner <b style="color:#8a6a2e">'+tierXP(P)+' points d\'expérience</b> et lire sa fiche.</span>';return;}
     poiBody.textContent='Chargement de la fiche…';
     poiStory(P).then(r=>{if(my===poiReq)showStory(r);}).catch(()=>{if(my===poiReq)showStory(fallbackStory(P,R));});}
-  const welcome=document.getElementById('welcome');
-  // Le conseil d'accueil par DÉFAUT (dans le HTML) = celui du DISTRIBUABLE (vrai GPS + podomètre) : c'est le cas de TOUS les
-  // joueurs. En TEST seulement, on le remplace par le conseil de simulation (⚙ = recherche de ville + marche auto).
-  // (Avant : le conseil de test était affiché à tout le monde — or ni le ⚙ ni la marche auto n'existent en distribuable.)
-  if(DEV){const _t=document.getElementById('wcTip');if(_t)_t.innerHTML='Astuce : ouvre <b>⚙</b> (en bas à droite) → <b>cherche ta ville</b> pour explorer ton quartier, ou lance la <b>marche auto</b>.';}
-  try{if(localStorage.getItem('pas1001_seen_welcome'))welcome.classList.add('hidden');}catch(e){}
-  document.getElementById('wcGo').onclick=()=>{welcome.classList.add('hidden');try{localStorage.setItem('pas1001_seen_welcome','1');}catch(e){}};
+  // (carte d'accueil retirée build 158 — on ouvre directement sur la carte ; la clé `pas1001_seen_welcome` des anciens joueurs devient inerte)
   const $=id=>document.getElementById(id);
   const el={pseudo:$('pTitle'),sub:$('pSub'),xp:$('xpFill'),hint:$('xpHint'),zoom:$('zoomVal'),
     csLvl:$('csLvl'),csXp:$('csXp'),csXpCur:$('csXpCur'),csXpRem:$('csXpRem'),
