@@ -509,7 +509,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       <h1>1001 Pas</h1>
       <div class="sub">atlas enluminé de votre vie</div>
       <p>Ta vraie vie devient une carte que tu révèles en marchant. Avance pour lever la brume, découvrir tes zones et leurs sites.</p>
-      <p class="tip">Astuce : ouvre <b>⚙</b> (en haut à droite) → <b>cherche ta ville</b> pour explorer ton quartier, ou lance la <b>marche auto</b>.</p>
+      <p class="tip" id="wcTip">Astuce : autorise la <b>localisation</b> (🔒) pour que la carte te suive. Tes pas comptent <b>même quand l'app est fermée</b>.</p>
       <button id="wcGo">EXPLORER</button>
     </div>
   </div>
@@ -1543,7 +1543,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=156;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=157;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1797,6 +1797,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     poiBody.textContent='Chargement de la fiche…';
     poiStory(P).then(r=>{if(my===poiReq)showStory(r);}).catch(()=>{if(my===poiReq)showStory(fallbackStory(P,R));});}
   const welcome=document.getElementById('welcome');
+  // Le conseil d'accueil par DÉFAUT (dans le HTML) = celui du DISTRIBUABLE (vrai GPS + podomètre) : c'est le cas de TOUS les
+  // joueurs. En TEST seulement, on le remplace par le conseil de simulation (⚙ = recherche de ville + marche auto).
+  // (Avant : le conseil de test était affiché à tout le monde — or ni le ⚙ ni la marche auto n'existent en distribuable.)
+  if(DEV){const _t=document.getElementById('wcTip');if(_t)_t.innerHTML='Astuce : ouvre <b>⚙</b> (en bas à droite) → <b>cherche ta ville</b> pour explorer ton quartier, ou lance la <b>marche auto</b>.';}
   try{if(localStorage.getItem('pas1001_seen_welcome'))welcome.classList.add('hidden');}catch(e){}
   document.getElementById('wcGo').onclick=()=>{welcome.classList.add('hidden');try{localStorage.setItem('pas1001_seen_welcome','1');}catch(e){}};
   const $=id=>document.getElementById(id);
