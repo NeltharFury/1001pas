@@ -1537,7 +1537,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       syncBgUI();
     }
     if(window.__wake)__wake(700);};
-  const APP_BUILD=160;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=161;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2219,21 +2219,25 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
         fctx.strokeStyle=pass?'rgba(180,100,20,0.85)':'rgba(120,32,32,0.85)';fctx.lineWidth=1.8;fctx.lineJoin='round';fctx.stroke();}                          // liseré (couleur du type)
       fctx.restore();}}
     fctx.textAlign='center';fctx.textBaseline='middle';
-    // 1) cartouches des noms (un seul par nom) — dessinés d'abord : les noms de sites leur céderont la place
+    // 1) cartouches des noms (un seul par nom) — dessinés d'abord : les noms de sites leur céderont la place.
+    //    PALIER DE ZOOM commune ↔ localités (fondu croisé, comme canton/pays au dézoom) : large = nom de la COMMUNE,
+    //    rapproché = noms des LOCALITÉS. fLoc monte de 13.0 à 13.6 ; fCom = 1-fLoc (la commune s'efface quand les localités se nomment).
     labelBoxes.length=0;
     const shownNames=new Set();
-    // a) nom de chaque FORME révélée de dz = localité découverte (id 'l…') OU commune-bloc fullR (id 'c…'). L'étoile ★ de
-    //    complétion vient de compR (clés de COMMUNE 'c…') → n'apparaît donc que sur les communes-bloc, pas sur les localités.
-    for(const Z of dz){const av=1-Z.rev;const c=proj(Z.cx,Z.cy);
+    const fLoc=clamp((z-13.0)/0.6,0,1), fCom=1-fLoc;
+    // a) nom de chaque FORME révélée de dz = localité découverte (id 'l…', fondu fLoc) OU commune-bloc fullR (id 'c…', pleine, z>=12).
+    //    L'étoile ★ de complétion vient de compR (clés de COMMUNE 'c…') → n'apparaît que sur les communes-bloc, pas sur les localités.
+    for(const Z of dz){const av=1-Z.rev;const isLoc=(Z.id&&Z.id[0]==='l');const a=isLoc?av*fLoc:av;
+      if(a<=0.01)continue;const c=proj(Z.cx,Z.cy);
       if(z>=12&&c.x>-160&&c.x<W+160&&c.y>-40&&c.y<H+40&&!shownNames.has(Z.name)){shownNames.add(Z.name);
-        cartouche(c.x,c.y,Z.name.toUpperCase()+(state.compR.has(Z.id)?' ★':''),av);}} // masqués au fort dézoom (illisibles)
-    // b) NOM DE LA COMMUNE-MÈRE (+ ★ de complétion) pour les communes à LOCALITÉS : sans ça, seuls les noms de localités
-    //    s'affichaient et le nom de la commune + son étoile disparaissaient de la carte (résidu du chantier Localités).
-    for(const Z of world.communes){if(!Z.discovered||state.fullR.has(Z.id)||!Z.locs||!Z.locs.length)continue;
+        cartouche(c.x,c.y,Z.name.toUpperCase()+(state.compR.has(Z.id)?' ★':''),a);}}
+    // b) NOM DE LA COMMUNE-MÈRE (+ ★) pour les communes à LOCALITÉS, en fondu fCom → visible ZOOM LARGE (vue « province »),
+    //    s'efface quand on zoome et que les noms de localités prennent le relais. (Sinon la commune + son étoile disparaissaient.)
+    if(fCom>0.01)for(const Z of world.communes){if(!Z.discovered||state.fullR.has(Z.id)||!Z.locs||!Z.locs.length)continue;
       if(!Z.locs.some(function(L){return L.discovered;}))continue;   // au moins une localité révélée (sinon rien n'est dessiné pour cette commune)
       const c=proj(Z.cx,Z.cy);
       if(z>=12&&c.x>-160&&c.x<W+160&&c.y>-40&&c.y<H+40&&!shownNames.has(Z.name)){shownNames.add(Z.name);
-        cartouche(c.x,c.y,Z.name.toUpperCase()+(state.compR.has(Z.id)?' ★':''),1);}}
+        cartouche(c.x,c.y,Z.name.toUpperCase()+(state.compR.has(Z.id)?' ★':''),fCom);}}
     // 1bis) NIVEAUX AU DÉZOOM (hiérarchie officielle) : en dézoomant, passage de relais Canton → Pays → Continent.
     //   Chaque niveau est plus GRAND que le précédent (rang lisible d'un coup d'œil). Le relais est piloté par le SERREMENT
     //   des étiquettes : dès que les cantons commencent à se serrer, TOUT le niveau canton fond ENSEMBLE (une seule opacité)
