@@ -424,6 +424,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="sp-row"><span>Zones complétées</span><i></i><b id="sWorld">0</b></div>
     <div class="cs-sec">Préférences</div>
     <div class="row"><div class="rl"><span>Carte orientée dans mon sens</span><small>La carte pivote selon ta direction (défaut : nord en haut)</small></div><button class="tg2" id="rotBtn">Activer</button></div>
+    <div class="row" id="bgRow" style="display:none"><div class="rl"><span>Exploration en arrière-plan</span><small>Révèle la carte même app fermée (notification permanente + un peu plus de batterie)</small></div><button class="tg2" id="bgBtn">Activer</button></div>
     <div class="cs-ver" id="csVer"></div>
   </div>
 
@@ -1161,7 +1162,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // Sauvegarde SÉPARÉE test/distribuable : la version distribuable démarre TOUJOURS vierge (progression propre),
   // les parties de simulation (test) ne polluent pas ce que verront les vrais joueurs.
   const SAVE_KEY='pas1001_realmap_v3'+(DEV?'':'_prod2');   // _prod2 = remise à zéro de la version distribuable (nouvelle économie d'XP)
-  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',forbAck:false,passAck:false,discR:new Set(),discC:new Set(),discPays:new Set(),discCont:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set(),discL:new Set(),fullR:new Set()};   // forbAck = « ne plus me rappeler » ROUGE ; passAck = ORANGE (séparés : renoncer à l'orange ne masque JAMAIS l'alerte rouge)  // discC = CONTRÉES/cantons ; discPays = PAYS ; discCont = CONTINENTS découverts (grands niveaux)  // discL = LOCALITÉS découvertes ; fullR = communes révélées EN ENTIER (anciens saves / sans localités réelles / repli réseau) — jamais de re-brumage
+  const state={pl:{x:0,y:0},xp:0,dist:0,stepXpGiven:0,pseudo:'Voyageur',forbAck:false,passAck:false,discR:new Set(),discC:new Set(),discPays:new Set(),discCont:new Set(),discP:new Set(),compR:new Set(),ach:new Set(),visited:new Set(),discL:new Set(),fullR:new Set(),bgTrack:false};   // forbAck = « ne plus me rappeler » ROUGE ; passAck = ORANGE (séparés : renoncer à l'orange ne masque JAMAIS l'alerte rouge)  // discC = CONTRÉES/cantons ; discPays = PAYS ; discCont = CONTINENTS découverts (grands niveaux)  // discL = LOCALITÉS découvertes ; fullR = communes révélées EN ENTIER (anciens saves / sans localités réelles / repli réseau) — jamais de re-brumage  // bgTrack = option « exploration en arrière-plan » (opt-in, natif seulement)
   const trail=[]; let dirty=false,prevLevel=1,prevTitle=TITLES[0].name;
 
   let saveWarned=false;
@@ -1169,7 +1170,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // la sauvegarde de la PROGRESSION est prioritaire : si le stockage est plein, on sacrifie le cache OSM,
   // et si ça échoue encore on PRÉVIENT le joueur (jamais d'échec silencieux → perte de progression)
   function save(){if(!world)return false;const js=JSON.stringify({   // garde : dirty peut être vrai avant l'init du monde → sans ça, world.C.lng jetterait en boucle. Renvoie true si la progression est bien écrite.
-    C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck, rotMap:!!state.rotMap, gf:!!state.gpsFounded,
+    C:[world.C.lng,world.C.lat], x:state.pl.x,y:state.pl.y, xp:state.xp, dist:state.dist, pseudo:state.pseudo, forbAck:state.forbAck, passAck:state.passAck, rotMap:!!state.rotMap, bgTrack:!!state.bgTrack, gf:!!state.gpsFounded,
     discR:[...state.discR],discC:[...state.discC],discPays:[...state.discPays],discCont:[...state.discCont],discP:[...state.discP],compR:[...state.compR],ach:[...state.ach],visited:[...state.visited],discL:[...state.discL],fullR:[...state.fullR]});
     try{localStorage.setItem(SAVE_KEY,js);}
     catch(e){purgeOsmCache(0);
@@ -1186,7 +1187,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(pedAnchorDirty){pedSaveTotal(pedLastTotal);pedAnchorDirty=false;}   // ancre podomètre persistée APRÈS la progression (crédit ATOMIQUE : l'ancre n'avance sur disque que si les pas crédités sont sauvés → jamais de pas perdus, fenêtre de double-crédit ≈ 0)
     return true;}   // succès → efface l'éventuelle alerte de sauvegarde
   function applySaved(d){
-    state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;state.passAck=!!d.passAck;state.rotMap=!!d.rotMap;state.gpsFounded=!!d.gf;
+    state.pl.x=d.x||0;state.pl.y=d.y||0;state.xp=d.xp||0;state.dist=d.dist||0;state.stepXpGiven=Math.floor(state.dist/0.75);state.pseudo=d.pseudo||'Voyageur';state.forbAck=!!d.forbAck;state.passAck=!!d.passAck;state.rotMap=!!d.rotMap;state.bgTrack=!!d.bgTrack;state.gpsFounded=!!d.gf;
     // discR/compR = ids de ZONES réelles ('c'+id). On ignore les anciennes clés Voronoï ('i,j') des sauvegardes d'avant → compteur exact ; reconcileZones() re-révèle depuis les lieux débloqués.
     (d.discR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.discR.add(k);});(d.discC||[]).forEach(k=>{if(k)state.discC.add(k);});(d.discPays||[]).forEach(k=>{if(k)state.discPays.add(k);});(d.discCont||[]).forEach(k=>{if(k)state.discCont.add(k);});(d.discP||[]).forEach(k=>state.discP.add(k));(d.compR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.compR.add(k);});(d.ach||[]).forEach(k=>state.ach.add(k));(d.visited||[]).forEach(k=>state.visited.add(k));
     (d.discL||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='l')state.discL.add(k);});(d.fullR||[]).forEach(k=>{if(typeof k==='string'&&k[0]==='c')state.fullR.add(k);});
@@ -1513,7 +1514,30 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   if(rotBtn)rotBtn.onclick=function(){state.rotMap=!state.rotMap;syncRotUI();dirty=true;try{save();}catch(_){}
     if(state.rotMap)state.mapBearing=map.getBearing(); else{state.mapBearing=undefined;map.easeTo({bearing:0,duration:420});}   // ON → part du relèvement courant puis lisse vers le cap ; OFF → retour nord en haut (animé ; la boussole suit via l'event rotate)
     if(window.__wake)__wake(700);};
-  const APP_BUILD=158;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  // ---- OPTION « Exploration en arrière-plan » (opt-in, NATIF seulement) ----
+  // OFF par défaut (vie privée + zéro friction). ON → le service natif journalise le trajet app fermée (notif permanente),
+  // rejoué à la réouverture pour débloquer contrées/sites croisés. Le plugin (bgPlugin) est branché au boot par startBackgroundTracker.
+  let bgPlugin=null;
+  const bgBtn=document.getElementById('bgBtn'),bgRow=document.getElementById('bgRow');
+  if(bgRow&&NATIVE)bgRow.style.display='';   // affichée UNIQUEMENT dans l'app (aucun service en navigateur)
+  function syncBgUI(){if(!bgBtn)return;bgBtn.classList.toggle('on',!!state.bgTrack);bgBtn.textContent=state.bgTrack?'Actif':'Activer';}
+  if(bgBtn)bgBtn.onclick=function(){
+    if(!state.bgTrack){
+      if(!bgPlugin){toast('r','⚠','Indisponible','Disponible seulement dans l\'app installée');return;}
+      bgBtn.textContent='…';
+      bgPlugin.enable().then(function(r){
+        if(r&&r.enabled){state.bgTrack=true;window.__bg.enabled=true;dirty=true;try{save();}catch(_){}
+          toast('r','◈','Exploration en arrière-plan activée','La carte se révélera pendant que tu marches, app fermée');}
+        else{toast('r','⚠','Non activé',(r&&r.error)||'Autorise la localisation et les notifications');}
+        syncBgUI();
+      }).catch(function(e){toast('r','⚠','Erreur',''+((e&&e.message)||e));syncBgUI();});
+    }else{
+      state.bgTrack=false;window.__bg.enabled=false;dirty=true;try{save();}catch(_){}
+      if(bgPlugin){try{bgPlugin.disable();}catch(_){}}
+      syncBgUI();
+    }
+    if(window.__wake)__wake(700);};
+  const APP_BUILD=159;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -2502,11 +2526,11 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   function startBackgroundTracker(){
     try{ var C=window.Capacitor;
       var BG=(C&&C.Plugins&&C.Plugins.BackgroundTracker) || (C&&typeof C.registerPlugin==='function'&&C.registerPlugin('BackgroundTracker'));
-      if(!BG){window.__bg.err='plugin introuvable';return;}
-      window.__bg.plugin=true;
-      BG.getBuffer().then(function(r){ var pos=(r&&r.positions)||[]; if(pos.length){var res=replayClosedPath(pos);window.__bg.replayed=(res.zones||0)+(res.sites||0);} }) // rejoue puis le natif vide le tampon
+      if(!BG){window.__bg.err='plugin introuvable';syncBgUI();return;}
+      window.__bg.plugin=true;bgPlugin=BG;syncBgUI();   // plugin dispo → l'option devient utilisable (et reflète l'état sauvegardé)
+      BG.getBuffer().then(function(r){ var pos=(r&&r.positions)||[]; if(pos.length){var res=replayClosedPath(pos);window.__bg.replayed=(res.zones||0)+(res.sites||0);} }) // rejoue TOUJOURS le tampon restant (inoffensif si vide) puis le natif le vide
         .catch(function(e){window.__bg.err=''+((e&&e.message)||e);});
-      BG.enable().then(function(r){window.__bg.enabled=!!(r&&r.enabled);}).catch(function(e){window.__bg.err=''+((e&&e.message)||e);}); // (re)démarre la journalisation (perm « tout le temps »)
+      if(state.bgTrack) BG.enable().then(function(r){window.__bg.enabled=!!(r&&r.enabled);if(!(r&&r.enabled)){state.bgTrack=false;syncBgUI();}}).catch(function(e){window.__bg.err=''+((e&&e.message)||e);}); // ne (re)démarre le service QUE si l'option est activée (opt-in)
     }catch(e){window.__bg.err=''+((e&&e.message)||e);} }
 
   // récolte des tuiles (throttlée) : lieux + noms de quartiers INSTANTANÉS dès que des tuiles arrivent
@@ -2531,7 +2555,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const C=(saved&&saved.C)?saved.C:CONFIG.defaultCenter;
     initWorld(C);
     if(saved){try{applySaved(saved);}catch(e){logErr('applySaved',e);try{localStorage.setItem(SAVE_KEY+'_bak',JSON.stringify(saved));localStorage.removeItem(SAVE_KEY);}catch(_){}}}   // sauvegarde corrompue / schéma inattendu → mise de côté (_bak) au lieu de bloquer tout le boot
-    syncRotUI();   // reflète l'option « carte orientée » chargée sur le bouton (bearing s'appliquera au 1er déplacement)
+    syncRotUI();syncBgUI();   // reflète les options chargées (« carte orientée » + « exploration en arrière-plan ») sur leurs boutons
     map.setCenter(playerLngLat());map.setZoom(CONFIG.defaultZoom);
     ready=true;wake(2500);               // premier rendu + révélation initiale
     revealStart();                       // dévoile la contrée de départ (fix « je vois plus rien »)
