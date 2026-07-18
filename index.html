@@ -30,6 +30,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     --sans: system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
     --panelG:linear-gradient(180deg,#f7edd2,#efe0b8);
     --panelSh:inset 0 0 0 2px rgba(250,242,220,.65),inset 0 0 0 3px rgba(74,52,33,.14),0 6px 18px rgba(40,24,6,.32);
+    --tabH:calc(56px + env(safe-area-inset-bottom,0px));   /* hauteur de la barre d'onglets — TOUT ce qui est ancré en bas s'y réfère */
   }
   @keyframes riseIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
   @keyframes riseInC{from{opacity:0;transform:translate(-50%,9px)}to{opacity:1;transform:translate(-50%,0)}}
@@ -47,7 +48,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #grain{position:absolute;inset:0;pointer-events:none;z-index:3;mix-blend-mode:multiply;opacity:.5;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='420' height='420'><filter id='m' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='4'/><feColorMatrix type='matrix' values='0 0 0 0 0.44  0 0 0 0 0.32  0 0 0 0 0.15  0 0 0 0.13 0'/></filter><rect width='420' height='420' filter='url(%23m)'/></svg>"),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='2'/><feColorMatrix type='matrix' values='0 0 0 0 0.3  0 0 0 0 0.22  0 0 0 0 0.1  0 0 0 0.06 0'/></filter><rect width='240' height='240' filter='url(%23g)'/></svg>");}
-  .maplibregl-ctrl-bottom-left{z-index:6;}   /* le « i » d'attribution PASSE PAR-DESSUS la brume (#fog z2 / #grain z3) — sinon il disparaît sous le voile */
+  .maplibregl-ctrl-bottom-left{z-index:6;bottom:var(--tabH);}   /* le « i » d'attribution PASSE PAR-DESSUS la brume (#fog z2 / #grain z3) — sinon il disparaît sous le voile ; remonté au-dessus de la barre d'onglets */
   /* « i » d'attribution (élément <details>/<summary>) au STYLE de l'interface (parchemin), OUVERT COMME FERMÉ, + plus de liseré bleu */
   .maplibregl-ctrl-attrib{font-size:9px;background:rgba(247,237,210,.92)!important;border:1px solid rgba(74,52,33,.38);border-radius:11px;box-shadow:0 3px 10px rgba(40,24,6,.22);}
   .maplibregl-ctrl-attrib-button{background-color:rgba(247,237,210,.95)!important;border-radius:11px;}   /* le « i » REPLIÉ = pastille parchemin (plus blanche) */
@@ -135,8 +136,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
            border:1px solid rgba(250,242,220,.6);box-shadow:0 3px 10px rgba(40,24,6,.5);transition:transform .05s linear;}
 
   /* ── contrôles en bas à droite (zone du pouce) : recherche, zoom ── */
-  #ctrlStack{right:14px;bottom:20px;display:flex;flex-direction:column;gap:11px;align-items:center;}
-  body.routing #ctrlStack{bottom:82px;}   /* remonte au-dessus de la barre d'itinéraire pleine largeur */
+  #ctrlStack{right:14px;bottom:calc(var(--tabH) + 12px);display:flex;flex-direction:column;gap:11px;align-items:center;}
+  body.routing #ctrlStack{bottom:calc(var(--tabH) + 74px);}   /* remonte au-dessus de la barre d'itinéraire pleine largeur */
   #zoomStack{display:flex;flex-direction:column;gap:8px;background:linear-gradient(180deg,#f4e8ca,#e9d9b1);
     border:1px solid rgba(74,52,33,.5);border-radius:26px;padding:5px;box-shadow:var(--panelSh);}
   #zoomStack button{width:42px;height:42px;border-radius:50%;border:none;background:transparent;
@@ -146,19 +147,19 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #compass{right:13px;top:12px;pointer-events:none;opacity:.85;transform-origin:50% 55%;}   /* origine = centre de la rose ; tourne (sans transition, pour coller au cap) quand l'option « carte orientée » est active */
   #compass svg{width:70px;height:70px;display:block;}   /* aussi haute que la fenêtre de profil (haut-gauche) */
 
-  #simBtn{right:78px;bottom:20px;font-size:21px;cursor:pointer;z-index:6;}   /* test : même taille que les autres boutons, en bas à DROITE (à côté de la pile), par-dessus tout */
-  #simPanel{left:12px;right:12px;bottom:12px;max-width:440px;margin:0 auto;padding:15px 16px 17px;z-index:12;
+  #simBtn{right:78px;bottom:calc(var(--tabH) + 12px);font-size:21px;cursor:pointer;z-index:6;}   /* test : même taille que les autres boutons, en bas à DROITE (à côté de la pile), par-dessus tout */
+  #simPanel{left:12px;right:12px;bottom:calc(var(--tabH) + 10px);max-width:440px;margin:0 auto;padding:15px 16px 17px;z-index:12;
             transform:translateY(160%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:78vh;overflow:auto;}
   #simPanel.open{transform:translateY(0);}
   body.prod #simBtn, body.prod #simPanel, body.prod #joystick{display:none!important;}
 
-  /* ── fiche de personnage (bas de l'écran, ouverte en touchant l'identité) ── */
-  #charSheet{left:0;right:0;bottom:0;max-width:520px;margin:0 auto;z-index:11;position:absolute;
+  /* ── panneaux d'ONGLET (Profil = fiche de personnage, Succès, Paramètres) : feuilles qui glissent du bas, posées SUR la barre d'onglets ── */
+  #charSheet,#achPanel,#setPanel{left:0;right:0;bottom:var(--tabH);max-width:520px;margin:0 auto;z-index:11;position:absolute;
     border-radius:20px 20px 0 0;background:linear-gradient(180deg,#f8efd6,#efe0ba);border:1px solid rgba(74,52,33,.55);border-bottom:none;
     box-shadow:inset 0 2px 0 rgba(250,242,220,.8),0 -14px 40px rgba(40,24,6,.45);
-    transform:translateY(110%);transition:transform .42s cubic-bezier(.3,.9,.3,1);padding:0 20px 24px;max-height:82vh;overflow:auto;}
-  #charSheet.open{transform:translateY(0);}
-  #charSheet .cs-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:1px solid rgba(74,52,33,.4);
+    transform:translateY(150%);transition:transform .42s cubic-bezier(.3,.9,.3,1);padding:0 20px 24px;max-height:78vh;overflow:auto;}
+  #charSheet.open,#achPanel.open,#setPanel.open{transform:translateY(0);}
+  #charSheet .cs-close,#achPanel .cs-close,#setPanel .cs-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:1px solid rgba(74,52,33,.4);
     background:rgba(74,52,33,.07);cursor:pointer;font-size:12px;color:#4a3421;line-height:1;padding:0;}
   .cs-head{display:flex;gap:13px;align-items:center;padding-right:34px;}
   .cs-head .crest{width:56px;height:56px;}
@@ -167,13 +168,22 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #csPseudo:focus{border-bottom-color:var(--rouge);}
   .cs-lvl{font-size:10.5px;letter-spacing:1.2px;color:var(--inkSoft);margin-top:4px;font-variant:small-caps;}
   .cs-title{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:1.4px;color:var(--or);margin-top:3px;}   /* dernier TITRE MÉRITÉ acquis, sous le niveau */
-  /* Titres mérités (fiche) : acquis = or + rosette ; à venir = grisé + progression */
-  .tt-row{padding:6px 2px 7px;border-bottom:1px dashed rgba(74,52,33,.16);}
-  .tt-row:last-child{border-bottom:none;}
-  .tt-name{font-family:var(--display);font-size:12.5px;font-weight:700;letter-spacing:.8px;color:var(--or);}
-  .tt-row.locked .tt-name{color:var(--inkSoft);opacity:.8;}
-  .tt-sub{font-size:10.5px;font-style:italic;color:var(--inkSoft);margin-top:1px;}
-  .tt-prog{font-size:10px;letter-spacing:.4px;color:#8a6a2e;margin-top:2px;font-variant:tabular-nums;}
+  /* Succès (onglet) : rosette + intitulé + récompense (TITRE) + progression — accompli = or, à venir = grisé */
+  .ac-row{display:flex;gap:12px;align-items:flex-start;padding:11px 2px 12px;border-bottom:1px dashed rgba(74,52,33,.16);}
+  .ac-row:last-child{border-bottom:none;}
+  .ac-badge{width:40px;height:40px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:19px;color:var(--or);
+    background:radial-gradient(circle at 38% 30%,#f8efd6,#ecd9a8);border:1.5px solid rgba(176,132,39,.75);
+    box-shadow:inset 0 0 0 2px rgba(250,242,220,.6),0 2px 6px rgba(40,24,6,.22);}
+  .ac-row.locked .ac-badge{color:rgba(74,52,33,.4);border-color:rgba(74,52,33,.28);filter:saturate(.25);}
+  .ac-body{flex:1;min-width:0;}
+  .ac-name{font-family:var(--display);font-size:13px;font-weight:700;color:#35240f;letter-spacing:.4px;}
+  .ac-row.locked .ac-name{color:var(--inkSoft);}
+  .ac-reward{font-size:11px;font-style:italic;color:var(--or);margin-top:2px;}
+  .ac-row.locked .ac-reward{color:var(--inkSoft);opacity:.85;}
+  .ac-barw{position:relative;height:5px;border-radius:3px;background:rgba(74,52,33,.18);margin-top:7px;overflow:hidden;}
+  .ac-barw i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:linear-gradient(90deg,#8a5e14,#cfa84a 55%,#e7c877);}
+  .ac-prog{font-size:10px;letter-spacing:.4px;color:#8a6a2e;margin-top:3px;font-variant-numeric:tabular-nums;}
+  .ac-done{font-size:10.5px;color:var(--or);margin-top:3px;letter-spacing:.6px;font-variant:small-caps;}
   .cs-xpwrap{margin:14px 0 4px;}
   .cs-xpwrap .xpbar{width:100%;height:7px;}
   .cs-xpnum{display:flex;justify-content:space-between;font-size:11px;color:#7c5a17;margin-top:5px;font-variant-numeric:tabular-nums;}
@@ -186,10 +196,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   .cs-note{font-size:10.5px;font-style:italic;color:var(--inkSoft);margin-top:12px;line-height:1.4;}
   .cs-ver{text-align:center;font-size:9.5px;letter-spacing:.4px;color:rgba(74,52,33,.5);margin:16px 0 2px;}
   /* ── panneau de complétion (façon Guild Wars 2) — bouton dans #ctrlStack (bas-droite, à portée du pouce) ── */
-  #progPanel{left:0;right:0;bottom:0;max-width:520px;margin:0 auto;z-index:12;position:absolute;
+  #progPanel{left:0;right:0;bottom:var(--tabH);max-width:520px;margin:0 auto;z-index:12;position:absolute;
     border-radius:20px 20px 0 0;background:linear-gradient(180deg,#f8efd6,#efe0ba);border:1px solid rgba(74,52,33,.55);border-bottom:none;
     box-shadow:inset 0 2px 0 rgba(250,242,220,.8),0 -14px 40px rgba(40,24,6,.45);
-    transform:translateY(110%);transition:transform .42s cubic-bezier(.3,.9,.3,1);padding:0 20px 24px;max-height:88vh;overflow:auto;}
+    transform:translateY(150%);transition:transform .42s cubic-bezier(.3,.9,.3,1);padding:0 20px 24px;max-height:82vh;overflow:auto;}
   #progPanel.open{transform:translateY(0);}
   #progPanel .cs-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:1px solid rgba(74,52,33,.4);
     background:rgba(74,52,33,.07);cursor:pointer;font-size:12px;color:#4a3421;line-height:1;padding:0;}
@@ -248,9 +258,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #loadChip.show .ldspin{animation:ldspin .9s linear infinite;}   /* le spinner ne tourne QUE quand le chip est visible (avant : animation infinie sur un élément à opacity:0 → le compositeur ne dormait jamais) */
   @keyframes ldspin{to{transform:rotate(360deg);}}
   /* état GPS (acquisition, précision, « autorise la localisation »…) — invisible tant que l'élément n'existait pas → parcours premier lancement muet. Placé BAS-centre pour ne jamais chevaucher #loadChip (haut-centre). */
-  #gpsChip{bottom:20px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 34px);padding:7px 15px;font-size:11.5px;font-style:italic;line-height:1.35;text-align:center;color:var(--ink);opacity:0;transition:opacity .25s;pointer-events:none;}
+  #gpsChip{bottom:calc(var(--tabH) + 12px);left:50%;transform:translateX(-50%);max-width:calc(100vw - 34px);padding:7px 15px;font-size:11.5px;font-style:italic;line-height:1.35;text-align:center;color:var(--ink);opacity:0;transition:opacity .25s;pointer-events:none;}
   #gpsChip.show{opacity:1;}
-  body.routing #gpsChip{bottom:82px;}   /* remonte au-dessus de la barre d'itinéraire */
+  body.routing #gpsChip{bottom:calc(var(--tabH) + 74px);}   /* remonte au-dessus de la barre d'itinéraire */
   /* alerte CRITIQUE (échec de sauvegarde…) — bandeau on-écran, INDÉPENDANT des notifications système (que l'utilisateur peut refuser) */
   #critAlert{top:60px;left:12px;right:12px;max-width:460px;margin:0 auto;z-index:60;padding:10px 14px;border-radius:12px;background:#7d1f1f;color:#fff3ee;font-size:12.5px;line-height:1.4;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.4);display:none;}
   #critAlert.show{display:block;}
@@ -294,8 +304,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   #markerPop .mp-ic svg{width:100%;height:100%;display:block;}
 
   /* ── barre d'itinéraire ── */
-  #routeBar{bottom:0;left:0;right:0;transform:none;display:none;align-items:center;gap:12px;box-sizing:border-box;
-    padding:13px 16px calc(13px + env(safe-area-inset-bottom));border-radius:16px 16px 0 0;background:var(--panelG);border:1px solid rgba(74,52,33,.55);border-bottom:none;
+  #routeBar{bottom:var(--tabH);left:0;right:0;transform:none;display:none;align-items:center;gap:12px;box-sizing:border-box;
+    padding:13px 16px;border-radius:16px 16px 0 0;background:var(--panelG);border:1px solid rgba(74,52,33,.55);border-bottom:none;
     box-shadow:inset 0 2px 0 rgba(250,242,220,.7),0 -12px 30px rgba(40,24,6,.42);animation:riseIn .3s ease both;z-index:11;}
   #routeBar.show{display:flex;}
   #routeBar .rb-to{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:#35240f;}
@@ -313,10 +323,10 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   :focus-visible{outline:2px solid var(--rouge);outline-offset:2px;}
 
   /* ── fiche de lieu : feuille parchemin qui glisse du bas, lettrine, filet orné ── */
-  #poiPanel{left:0;right:0;bottom:0;max-width:520px;margin:0 auto;z-index:9;position:absolute;
+  #poiPanel{left:0;right:0;bottom:var(--tabH);max-width:520px;margin:0 auto;z-index:9;position:absolute;
             border-radius:20px 20px 0 0;background:linear-gradient(180deg,#f8efd6,#efe0ba);border:1px solid rgba(74,52,33,.55);border-bottom:none;
             box-shadow:inset 0 2px 0 rgba(250,242,220,.8),inset 0 0 0 3px rgba(74,52,33,.1),0 -14px 40px rgba(40,24,6,.45);
-            transform:translateY(110%);transition:transform .42s cubic-bezier(.3,.9,.3,1);padding:0 20px 22px;}
+            transform:translateY(150%);transition:transform .42s cubic-bezier(.3,.9,.3,1);padding:0 20px 22px;}
   #poiPanel.open{transform:translateY(0);}
   .pp-grab{width:38px;height:4px;border-radius:2px;background:rgba(74,52,33,.28);margin:8px auto 10px;}
   #poiPanel .pp-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:1px solid rgba(74,52,33,.4);
@@ -341,6 +351,19 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   /* (carte d'accueil RETIRÉE build 158 — décision Étienne : « elle n'ajoute rien de concret ».
      Rien de fonctionnel n'en dépendait : la permission de notification est demandée au 1er pointerdown
      n'importe où, et la localisation est demandée par MainActivity au lancement du natif.) */
+
+  /* ═══ ONGLETS en bas d'écran (spec Étienne s28) : Profil · Succès · Carte · Paramètres — Carte = onglet par défaut ═══ */
+  #tabbar{position:absolute;left:0;right:0;bottom:0;z-index:13;display:flex;align-items:stretch;height:56px;
+    padding:0 0 env(safe-area-inset-bottom,0px);background:linear-gradient(180deg,#f6ecd0,#e8d6ab);
+    border-top:1px solid rgba(74,52,33,.55);box-shadow:inset 0 1px 0 rgba(250,242,220,.75),0 -8px 24px rgba(40,24,6,.28);}
+  .tab{flex:1;border:none;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    padding:0;color:rgba(74,52,33,.62);-webkit-tap-highlight-color:transparent;position:relative;min-width:0;}
+  .tab svg{width:23px;height:23px;display:block;transition:transform .13s cubic-bezier(.2,.8,.3,1);}
+  .tab:active svg{transform:scale(.88);}
+  .tab span{font-family:var(--display);font-size:8.5px;font-weight:700;letter-spacing:1.1px;line-height:1;text-transform:uppercase;white-space:nowrap;}
+  .tab.on{color:#7c5a17;}
+  .tab.on::before{content:"";position:absolute;top:0;left:22%;right:22%;height:2.5px;border-radius:0 0 3px 3px;   /* filet d'or au-dessus de l'onglet actif */
+    background:linear-gradient(90deg,transparent,#b98a2e 30%,#b98a2e 70%,transparent);}
   @media (max-width:380px){ .ident-text{min-width:112px;} #identity{max-width:58vw;} }
   @media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important;} }
 </style>
@@ -431,10 +454,24 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     <div class="sp-row"><span>Zones explorées</span><i></i><b id="sReg">0</b></div>
     <div class="sp-row"><span>Sites découverts</span><i></i><b id="sPoi">0 / 0</b></div>
     <div class="sp-row"><span>Zones complétées</span><i></i><b id="sWorld">0</b></div>
-    <div class="cs-sec">Titres</div>
-    <div id="titleList"></div>
-    <div class="cs-sec">Préférences</div>
-    <div class="row"><div class="rl"><span>Carte orientée dans mon sens</span><small>La carte pivote selon ta direction (défaut : nord en haut)</small></div><button class="tg2" id="rotBtn">Activer</button></div>
+  </div>
+
+  <!-- onglet SUCCÈS : chaque succès accompli récompense d'un TITRE (mécanique MERIT_TITLES inchangée, seul l'affichage vit ici) -->
+  <div id="achPanel" class="hud scroll">
+    <div class="pp-grab"></div>
+    <button class="cs-close" id="achClose" aria-label="Fermer">✕</button>
+    <div class="pp-title">Succès</div>
+    <div class="pg-zonesub" id="achSub">—</div>
+    <div id="achList"></div>
+    <div class="cs-note">Chaque succès accompli t'offre un <b>titre</b>, porté sous ton nom sur ta fiche. D'autres succès viendront enrichir l'atlas au fil des mises à jour.</div>
+  </div>
+
+  <!-- onglet PARAMÈTRES : absorbe les anciennes « Préférences » de la fiche -->
+  <div id="setPanel" class="hud scroll">
+    <div class="pp-grab"></div>
+    <button class="cs-close" id="setClose" aria-label="Fermer">✕</button>
+    <div class="pp-title">Paramètres</div>
+    <div class="row" style="margin-top:12px"><div class="rl"><span>Carte orientée dans mon sens</span><small>La carte pivote selon ta direction (défaut : nord en haut)</small></div><button class="tg2" id="rotBtn">Activer</button></div>
     <div class="row" id="bgRow" style="display:none"><div class="rl"><span>Exploration en arrière-plan</span><small>Révèle la carte même app fermée (notification permanente + un peu plus de batterie)</small></div><button class="tg2" id="bgBtn">Activer</button></div>
     <div class="cs-ver" id="csVer"></div>
   </div>
@@ -494,6 +531,22 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   <div id="markerPop" class="hud card"></div>
 
   <div id="toasts" class="hud"></div>
+
+  <!-- barre d'ONGLETS (spec Étienne s28) — glyphes 100 % code, Carte active par défaut -->
+  <nav id="tabbar" aria-label="Navigation principale">
+    <button class="tab" id="tabProfil" aria-label="Profil">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 6.6 L13.3 10.7 L17.4 12 L13.3 13.3 L12 17.4 L10.7 13.3 L6.6 12 L10.7 10.7 Z" fill="currentColor"/></svg>
+      <span>Profil</span></button>
+    <button class="tab" id="tabSucces" aria-label="Succès">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9.3" r="5.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9.4 13.8 L7.8 20 L12 17.7 L16.2 20 L14.6 13.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/><circle cx="12" cy="9.3" r="1.7" fill="currentColor"/></svg>
+      <span>Succès</span></button>
+    <button class="tab on" id="tabCarte" aria-label="Carte">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.2 L9.3 4.4 L14.7 6.2 L20 4.4 V17.8 L14.7 19.6 L9.3 17.8 L4 19.6 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.3 4.4 V17.8 M14.7 6.2 V19.6" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+      <span>Carte</span></button>
+    <button class="tab" id="tabParams" aria-label="Paramètres">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 4.4 V6.7 M12 17.3 V19.6 M4.4 12 H6.7 M17.3 12 H19.6 M6.7 6.7 L8.3 8.3 M15.7 15.7 L17.3 17.3 M17.3 6.7 L15.7 8.3 M8.3 15.7 L6.7 17.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+      <span>Paramètres</span></button>
+  </nav>
 
 </div>
 
@@ -1380,7 +1433,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const px=clientX-rect.left, py=clientY-rect.top;
     try{wheelLL=map.unproject([px,py]);}catch(_){return;}                       // le marqueur ira au point RÉELLEMENT pressé
     // position d'AFFICHAGE bornée : la roue reste ENTIÈREMENT à l'écran (jamais coupée, même au bord)
-    const DR=112, dispX=Math.max(DR,Math.min(rect.width-DR,px)), dispY=Math.max(DR,Math.min(rect.height-DR,py));
+    const DR=112, tbh=(document.getElementById('tabbar')||{}).offsetHeight||0;   // la roue ne déborde plus sur la barre d'onglets (revue adverse 163)
+    const dispX=Math.max(DR,Math.min(rect.width-DR,px)), dispY=Math.max(DR,Math.min(rect.height-tbh-DR,py));
     w.innerHTML='';w.style.left=dispX+'px';w.style.top=dispY+'px';
     const n=MARKER_TYPES.length, step=2*Math.PI/n;
     // VOILE plein écran INVISIBLE, posé AVANT le disque (donc dessous) : tout tap HORS du disque le touche → ferme à COUP SÛR.
@@ -1447,6 +1501,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       (pas!=null?'<div class="mp-s">≈ '+pas.toLocaleString('fr-FR')+' pas d\'ici</div>':'')+
       '<div class="mp-row"><button class="tg2" id="mpRoute">Itinéraire</button><button class="tg2 danger" id="mpDel">Supprimer</button></div>';
     p.style.left=Math.max(8,Math.min(W-178,mp.x-83))+'px';p.style.top=Math.max(8,mp.y-124)+'px';p.classList.add('show');
+    // borne BASSE (revue adverse 163) : mesuré une fois affiché, le popup ne déborde ni sur la barre d'onglets ni sous l'écran
+    const tbh=(document.getElementById('tabbar')||{}).offsetHeight||0,maxTop=H-tbh-(p.offsetHeight||150)-8;
+    if(parseFloat(p.style.top)>maxTop)p.style.top=Math.max(8,maxTop)+'px';
     const nameEl=document.getElementById('mpName');
     nameEl.addEventListener('input',()=>{mk.name=nameEl.value.trim()||undefined;saveMarkers();if(window.__wake)__wake(500);});   // RENOMMER : le libellé se met à jour EN DIRECT sur la carte
     p.querySelectorAll('.mp-ic').forEach(b=>{b.onclick=()=>{mk.type=b.getAttribute('data-t');saveMarkers();if(window.__wake)__wake(700);openMarkerPop(mk);};});  // ÉDITER LE TYPE : change l'icône du repère
@@ -1468,9 +1525,26 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   // ── zoom (le dézoom mène naturellement à la vue planète — plus de bouton dédié) ──
   document.getElementById('zin').onclick=()=>map.zoomIn();
   document.getElementById('zout').onclick=()=>map.zoomOut();
-  // ── fiche de personnage (toucher le panneau d'identité) ──
-  const charSheet=document.getElementById('charSheet');
-  document.getElementById('identity').onclick=()=>{if(charSheet.classList.contains('open')){charSheet.classList.remove('open');return;} charSheet.classList.add('open');progPanel.classList.remove('open');};
+  // ── ONGLETS en bas d'écran (spec Étienne s28) : Profil / Succès / Carte / Paramètres — Carte = onglet par défaut ──
+  // Un seul panneau d'onglet ouvert à la fois ; « Carte » (ou re-taper l'onglet actif) referme tout et rend la carte.
+  const charSheet=document.getElementById('charSheet'),achPanel=document.getElementById('achPanel'),setPanel=document.getElementById('setPanel');
+  const TAB_PANELS={profil:charSheet,succes:achPanel,params:setPanel};
+  const TAB_BTNS={profil:'tabProfil',succes:'tabSucces',carte:'tabCarte',params:'tabParams'};
+  let curTab='carte';
+  function setTab(name){if(!TAB_BTNS[name])name='carte';
+    curTab=name;
+    for(const k in TAB_BTNS){const b=document.getElementById(TAB_BTNS[k]);if(b)b.classList.toggle('on',k===name);}
+    for(const k in TAB_PANELS){const p=TAB_PANELS[k];if(p)p.classList.toggle('open',k===name);}
+    if(name!=='carte'){   // ouvrir un onglet ferme les panneaux « posés sur la carte » (complétion, fiche de lieu, popup de repère, recherche, sim)
+      progPanel.classList.remove('open');poiPanel.classList.remove('open');closeMarkerPop();
+      var sp=document.getElementById('simPanel');if(sp)sp.classList.remove('open');
+      var sb=document.getElementById('searchBar');if(sb&&sb.classList.contains('open')){sb.classList.remove('open');document.getElementById('searchResults').classList.remove('show');}}
+    if(name==='succes')renderTitles(true);   // liste des succès à jour à l'ouverture (fermée, elle n'est pas re-rendue)
+    if(window.__wake)__wake(600);}
+  for(const k in TAB_BTNS){(function(k){const b=document.getElementById(TAB_BTNS[k]);
+    if(b)b.onclick=function(){setTab(curTab===k&&k!=='carte'?'carte':k);};})(k);}
+  // toucher le panneau d'identité (haut-gauche) = raccourci vers l'onglet Profil
+  document.getElementById('identity').onclick=()=>setTab(curTab==='profil'?'carte':'profil');
   // ── PHOTO DE PROFIL : stockée à part (data URL redimensionnée), affichée dans les 2 emblèmes HTML + le sceau du joueur sur la carte ──
   const AVATAR_KEY='pas1001_avatar'+(DEV?'':'_prod');
   let avatarImg=null;
@@ -1498,7 +1572,9 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
   document.getElementById('csPhotoX').onclick=function(e){e.stopPropagation();removeAvatar();};          // ✕ = retirer la photo (sans rouvrir le sélecteur)
   photoInput.onchange=function(e){const f=e.target.files&&e.target.files[0];processAvatarFile(f);e.target.value='';};
   loadAvatar();
-  document.getElementById('csClose').onclick=()=>charSheet.classList.remove('open');
+  document.getElementById('csClose').onclick=()=>setTab('carte');
+  document.getElementById('achClose').onclick=()=>setTab('carte');
+  document.getElementById('setClose').onclick=()=>setTab('carte');
   // ── OPTION « Carte orientée dans mon sens » (réglage dans la fiche perso, dispo en distribuable) : la carte pivote selon le
   //    cap de marche + la rose des vents suit pour montrer le nord. Défaut OFF = nord toujours en haut (jamais imposé). ──
   const compassEl=document.getElementById('compass');
@@ -1559,7 +1635,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       syncBgUI();
     }
     if(window.__wake)__wake(700);};
-  const APP_BUILD=162;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
+  const APP_BUILD=163;   // numéro de build WEB (auto-MAJ) — à incrémenter aux déploiements notables
   const APP_VERSION='1001 Pas — v1.0.1 · build '+APP_BUILD+(DEV?' (test)':'');
   (function(){const v=document.getElementById('csVer');if(v)v.textContent=APP_VERSION;})();
   // ── Panneau de COMPLÉTION (façon Guild Wars 2) : stats + légende des symboles + progression par contrée ──
@@ -1613,14 +1689,14 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     if(!Z||!Z.discovered)sig='none';
     else{const got=(Z.pois||[]).filter(function(p){return state.discP.has(p.id);}).length;sig=Z.id+'|'+got+'|'+((Z.pois||[]).length)+'|'+(Z.contree||'')+'|'+(state.compR.has(Z.id)?1:0)+'|'+state.discR.size+'|'+state.compR.size;}  // discR/compR.size → le décompte de Contrée se rafraîchit à chaque nouvelle zone découverte/complétée
     if(sig!==_progSig){_progSig=sig;renderProgress();}}
-  document.getElementById('progBtn').onclick=function(){if(progPanel.classList.contains('open')){progPanel.classList.remove('open');return;} renderProgress();progPanel.classList.add('open');charSheet.classList.remove('open');var sp=document.getElementById('simPanel');if(sp)sp.classList.remove('open');};
+  document.getElementById('progBtn').onclick=function(){if(progPanel.classList.contains('open')){progPanel.classList.remove('open');return;} setTab('carte');renderProgress();progPanel.classList.add('open');var sp=document.getElementById('simPanel');if(sp)sp.classList.remove('open');};   // setTab('carte') ferme d'abord tout panneau d'onglet ouvert
   document.getElementById('progClose').onclick=function(){progPanel.classList.remove('open');};
   const csPseudo=document.getElementById('csPseudo');
   csPseudo.addEventListener('input',()=>{state.pseudo=csPseudo.value.slice(0,24)||'Voyageur';dirty=true;document.getElementById('pTitle').textContent=state.pseudo;});
   // ── loupe → barre de recherche ──
   const searchBarEl=document.getElementById('searchBar'),searchOpenBtn=document.getElementById('searchOpenBtn');
   searchOpenBtn.onclick=()=>{if(searchBarEl.classList.contains('open')){searchBarEl.classList.remove('open');topSearch.blur();return;}
-    searchBarEl.classList.add('open');charSheet.classList.remove('open');
+    setTab('carte');searchBarEl.classList.add('open');
     setTimeout(()=>{topSearch.focus();},60);renderSearch();};
   document.getElementById('searchClose').onclick=()=>{searchBarEl.classList.remove('open');
     topSearch.value='';searchResults.classList.remove('show');topSearch.blur();};
@@ -1802,7 +1878,8 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       const safeUrl=(r.srcUrl&&/^https:\/\//i.test(r.srcUrl))?r.srcUrl:null;   // 2e barrière : jamais de href javascript:/data: (escHtml n'échappe pas le SCHÉMA) → seule une vraie URL https est cliquable
       poiSrc.innerHTML='Source : '+(safeUrl?'<a href="'+escHtml(safeUrl)+'" target="_blank" rel="noopener">'+escHtml(r.srcLabel)+'</a>':escHtml(r.srcLabel));}
     else poiSrc.classList.add('hidden');}
-  function openPOI(P,R){poiPanel.classList.add('open');curPOI=P;
+  function openPOI(P,R){if(curTab!=='carte')setTab('carte');   // un panneau d'onglet ouvert masquerait la fiche (z9 < z11) : tap perçu mort + fiche surgissant après coup (revue adverse 163)
+    poiPanel.classList.add('open');curPOI=P;
     const unlocked=state.discP.has(P.id);
     poiIcon.style.backgroundImage='url("'+sealDataURL(P.g,46,false,siteTier(P),unlocked)+'")';   // sceau Fable : carmin si débloqué, cire grise sinon
     poiName.textContent=P.n;poiType.textContent=(P.type||'Site')+' · '+R.name;
@@ -1834,25 +1911,30 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
       var idc=document.getElementById('identity');if(idc){idc.classList.remove('levelup');void idc.offsetWidth;idc.classList.add('levelup');}}
     checkTitles();renderTitles();}
 
-  // ---- TITRES MÉRITÉS : détection (chaque tick du HUD, 2 tests → négligeable) + affichage dans la fiche ----
+  // ---- SUCCÈS & TITRES MÉRITÉS : détection à chaque tick du HUD (2 tests → négligeable) ; affichage = onglet Succès
+  //      (chaque succès récompense d'un TITRE) + titre porté sous le pseudo (fiche Profil). Mécanique inchangée depuis le 162.
   let _ttSig='';
   function renderTitles(force){
-    const cs=document.getElementById('charSheet');
-    if(!force&&(!cs||!cs.classList.contains('open')))return;    // fiche fermée → pas de re-rendu (la détection, elle, tourne toujours)
     const L=levelInfo(state.xp).level,steps=Math.floor(state.dist/0.75);
     const sig=state.titles.size+'|'+steps+'|'+L;
     if(!force&&sig===_ttSig)return;_ttSig=sig;                  // re-rendu SEULEMENT quand un chiffre affiché change (pas à chaque frame)
-    const list=document.getElementById('titleList');
-    if(list){let h='';
-      for(const T of MERIT_TITLES){const got=state.titles.has(T.id);
-        h+='<div class="tt-row'+(got?'':' locked')+'"><div class="tt-name">'+(got?'❈ ':'')+T.name+'</div>'
-          +'<div class="tt-sub">'+T.desc+'</div>'
-          +(got?'':'<div class="tt-prog">'+T.prog(state).txt+'</div>')+'</div>';}
-      list.innerHTML=h;}
-    const head=document.getElementById('csTitle');
+    const head=document.getElementById('csTitle');              // titre PORTÉ (fiche Profil) : suit même quand l'onglet Succès est fermé
     if(head){let last=null;for(const id of state.titles)last=id; // dernier acquis = dernier inséré (le Set garde l'ordre, persisté tel quel)
       const T=last?MERIT_TITLES.find(function(t){return t.id===last;}):null;
-      head.style.display=T?'':'none';head.textContent=T?('❈ '+T.name):'';}}
+      head.style.display=T?'':'none';head.textContent=T?('❈ '+T.name):'';}
+    if(!force&&!(achPanel&&achPanel.classList.contains('open')))return;   // liste des succès : rebâtie seulement onglet ouvert (setTab la force à l'ouverture)
+    const list=document.getElementById('achList');
+    if(list){let h='',gotN=0;
+      for(const T of MERIT_TITLES){const got=state.titles.has(T.id),pr=got?null:T.prog(state);
+        if(got)gotN++;
+        h+='<div class="ac-row'+(got?'':' locked')+'"><span class="ac-badge">❈</span>'
+          +'<div class="ac-body"><div class="ac-name">'+T.desc+'</div>'
+          +'<div class="ac-reward">Récompense : titre « '+T.name+' »</div>'
+          +(got?'<div class="ac-done">✓ accompli</div>'
+               :'<div class="ac-barw"><i style="width:'+Math.min(100,pr.cur/pr.max*100).toFixed(1)+'%"></i></div><div class="ac-prog">'+pr.txt+'</div>')
+          +'</div></div>';}
+      list.innerHTML=h;
+      const sub=document.getElementById('achSub');if(sub)sub.textContent=gotN+' / '+MERIT_TITLES.length+' accompli'+(gotN>1?'s':'');}}
   function checkTitles(){let earned=false;
     for(const T of MERIT_TITLES){if(state.titles.has(T.id)||!T.test(state))continue;
       state.titles.add(T.id);earned=true;dirty=true;
@@ -2620,7 +2702,7 @@ if(location.search.indexOf('raf=force')>=0){window.requestAnimationFrame=functio
     const C=(saved&&saved.C)?saved.C:CONFIG.defaultCenter;
     initWorld(C);
     if(saved){try{applySaved(saved);}catch(e){logErr('applySaved',e);try{localStorage.setItem(SAVE_KEY+'_bak',JSON.stringify(saved));localStorage.removeItem(SAVE_KEY);}catch(_){}}}   // sauvegarde corrompue / schéma inattendu → mise de côté (_bak) au lieu de bloquer tout le boot
-    syncRotUI();syncBgUI();renderTitles(true);   // reflète les options chargées sur leurs boutons + l'état initial des titres mérités (fiche)
+    syncRotUI();syncBgUI();renderTitles(true);   // reflète les options chargées sur leurs boutons (onglet Paramètres) + l'état initial des succès/titres
     map.setCenter(playerLngLat());map.setZoom(CONFIG.defaultZoom);
     ready=true;wake(2500);               // premier rendu + révélation initiale
     revealStart();                       // dévoile la contrée de départ (fix « je vois plus rien »)
